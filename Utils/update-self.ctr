@@ -3,7 +3,6 @@
 # or any other provided repository, provided that
 # it includes a signature file `citron_standard_library.version`
 
-import Library/Foreign/Interop/C.
 import Library/GUI/TK. # we don't actually need any GUI, we're just gonna
                        # piggyback Tcl's execution ([exec shell-command])
                        # since our own is blowing up on windows
