@@ -231,6 +231,7 @@ Inject on: 'struct' do: {:self
     }.
   }.
 }.
+
 var C is Object cnew: {
     on: 'process:' do: {:st
         var ff is Inject compile: st.
