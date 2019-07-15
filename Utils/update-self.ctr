@@ -1,0 +1,99 @@
+# updates the standard library by pulling an archive
+# from github.com/alimpfard/citron_standard_library
+# or any other provided repository, provided that
+# it includes a signature file `citron_standard_library.version`
+
+import Library/Foreign/Interop/C.
+import Library/GUI/TK. # we don't actually need any GUI, we're just gonna
+                       # piggyback Tcl's execution ([exec shell-command])
+                       # since our own is blowing up on windows
+                       # for some reason
+var check-signature-version is {:url
+  var curl is Curl new url: 'https://api.github.com/repos/${{url}}$/contents/citron_standard_library.version'.
+  curl httpheader: ['User-Agent: Citron/X-UA', 'Cache-Control: no-cache'].
+  var response is curl perform.
+  ^{
+    var res is JSON parse: response.
+    var dlurl is res @ 'download_url'.
+    dlurl isNil ifTrue: {
+      curl cleanup.
+      ^Nil.
+    } ifFalse: {
+      curl url: dlurl.
+      ^JSON parse: curl perform.
+    }.
+  } catch: {:e
+    curl cleanup.
+    ^False.
+  }, run.
+}.
+
+var get-packed-repo is {:url
+  var curl is Curl new url: 'https://api.github.com/repos/${{url}}$/tarball'.
+  curl httpheader: ['User-Agent: Citron/X-UA', 'Cache-Control: no-cache'].
+  curl followlocation: True.
+  var response is curl perform.
+  ^{
+    ^response.
+  } catch: {:e
+    Pen writeln: e.
+    curl cleanup.
+    ^Nil.
+  }, run.
+}.
+
+var version-newer-or-same? is {:version
+  ^{
+    var current-version is Reflect version split: '-' max: 1, head split: '.', fmap: \:x x toNumber.
+    version is version from: 0 length: 4.
+    ^current-version imap: {\:i:x version @ i <=: x.}, all: \:x x.
+  } catch: {
+    ^False.
+  }, run.
+}.
+
+var pull-stdlib-from is {:repo-name
+  Pen writeln: 'Checking $$repo-name for compat...'.
+  var metadata is check-signature-version[repo-name].
+  metadata isNil ifTrue: {
+    thisBlock error: 'the repository $$repo-name does not contains any version of citron\'s library (metadata is nil)'.
+  }.
+  Pen writeln: 'remote library has version ${{metadata @ 'version' join: ','}}$'.
+  version-newer-or-same?[metadata @ 'version'] ifFalse: {
+    thisBlock error: 'the repository $$repo-name contains an invalid or old version of the library (${{metadata}}$)'.
+  }.
+  var tmp is File tempFileLike: 'XXXXXX'.
+  tmp write: get-packed-repo[repo-name].
+  Pen writeln: 'wrote remote files to $$tmp'.
+  # tmp delete.
+  ^tmp.
+}.
+
+var replace-current-stdlib is {:replacement-tgz
+  var own-library is 'Library'.
+  Pen writeln: 'making a backup of current library...'.
+  Tcl eval: ?>exec tar czf {old_library.tar.gz} {%s}<? % [own-library].
+  Pen writeln: 'removing the current library...'.
+  Tcl eval: ?>file delete -force {%s}<? % [own-library]. # le ouch
+  Pen writeln: 'extracting new library...'.
+  Tcl eval: ?>exec tar xzf {%s}<? % [replacement-tgz].
+  var fnames is File list: '.', fmap: \:x x @ 'file', filter_v: \:x x startsWith: 'alimpfard-citron_standard_library-'.
+  fnames count !=: 1, ifTrue: {
+    thisBlock error: 'something broke, we shouldn\'t have more than one new libraries (we have ${{fnames count}}$)'.
+  }.
+  Tcl eval: ?>file rename -force -- {%s} Library<? % [fnames head].
+  Pen writeln: 'if this thing breaks, restore "old_library.tar.gz"'.
+}.
+
+var update-stdlib is {:from
+  var current-dir is Program changeDirectory: File extensionsPath.
+  var file is pull-stdlib-from[from or: 'alimpfard/citron_standard_library'].
+  Pen writeln: 'writing over library...'.
+  {
+    replace-current-stdlib[file path].
+  } catch: {:e
+    Pen writeln: 'Error: $$e'.
+  }, run.
+  file delete.
+  Program changeDirectory: current-dir.
+}.
