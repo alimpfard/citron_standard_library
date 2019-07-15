@@ -1,0 +1,10 @@
+import Library/Functional/TypeClass/Category.
+
+CodeBlock
+  inheritFrom: Category,
+  on: 'compose:' do: {:self:other
+    ^\:*args const other applyAll: [(const self applyAll: args)].
+  },
+  on: 'id' do: {
+    ^me.
+  }.
