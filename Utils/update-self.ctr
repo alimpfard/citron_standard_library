@@ -3,10 +3,14 @@
 # or any other provided repository, provided that
 # it includes a signature file `citron_standard_library.version`
 
+# import json since the native json parser isn't available
+# on windows (JSON)
+import Library/Data/Json/Parser: { Json => 'JSON'. }.
 import Library/GUI/TK. # we don't actually need any GUI, we're just gonna
                        # piggyback Tcl's execution ([exec shell-command])
                        # since our own is blowing up on windows
                        # for some reason
+
 var check-signature-version is {:url
   var curl is Curl new url: 'https://api.github.com/repos/${{url}}$/contents/citron_standard_library.version'.
   curl httpheader: ['User-Agent: Citron/X-UA', 'Cache-Control: no-cache'].
