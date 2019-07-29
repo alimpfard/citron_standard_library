@@ -2,7 +2,6 @@ import Library/Data/SwitchCase.
 
 #:language XFrozen
 
-
 var Json is Object cnew: {
   on: 'new' do: {:blk? }.
   learn: 'cnew:' means: 'new'.
@@ -13,15 +12,10 @@ var Json is Object cnew: {
 
   on: 'parse:' do: {:self:json
     var buffer is ''.
-    var skip is 0.
-    0 to: json length step: 1 do: {:i
-      skip > 0 ifTrue: {
-        skip -=: 1.
-        True continue.
-      }.
+    0 to: json length step: 1 do: {:&i
       var c is json at: i.
       c = '"' ifTrue: {
-        skip is (self appendUntilStringEndWithEscape: True fromIndex: i inString: json toBuffer: buffer).
+        i +=: (self appendUntilStringEndWithEscape: True fromIndex: i inString: json toBuffer: buffer).
         True continue.
       }.
       self isWhitespace: c, continue.
@@ -35,15 +29,10 @@ var Json is Object cnew: {
   }.
   on: 'fromJson:typed:' do: {:self:json:type
     var buffer is ''.
-    var skip is 0.
-    0 to: json length step: 1 do: {:i
-      skip > 0 ifTrue: {
-        skip -=: 1.
-        True continue.
-      }.
+    0 to: json length step: 1 do: {:&i
       var c is json at: i.
       c = '"' ifTrue: {
-        skip is (self appendUntilStringEndWithEscape: True fromIndex: i inString: json toBuffer: buffer).
+        i +=: (self appendUntilStringEndWithEscape: True fromIndex: i inString: json toBuffer: buffer).
         True continue.
       }.
       self isWhitespace: c, continue.
@@ -54,18 +43,13 @@ var Json is Object cnew: {
   on: 'appendUntilStringEndWithEscape:fromIndex:inString:toBuffer:' do: {:self:app:st:json:buffer
     buffer +=: (json at: st).
     var last is st.
-    var skip is 0.
-    st + 1 to: json length step: 1 do: {:i
-      skip > 0 ifTrue: {
-        skip -=: 1.
-        True continue.
-      }.
+    st + 1 to: json length step: 1 do: {:&i
       last is i.
       var c is json at: i.
       c = '\\' ifTrue: {
         app ifTrue: { buffer +=: c. }.
         buffer +=: json @ (i + 1).
-        skip is 1.
+        i +=: 1.
       } ifFalse: {
         c = '"' ifTrue: {
           buffer +=: c.
@@ -87,15 +71,10 @@ var Json is Object cnew: {
 
     var parseDepth is 0.
     var buffer is ''.
-    var skip is 0.
-    1 to: json length - 1 step: 1 do: {:iv
-      skip > 0 ifTrue: {
-        skip -=: 1.
-        True continue.
-      }.
+    1 to: json length - 1 step: 1 do: {:&iv
       (frozen _ is Nil
         case: '"' do: {
-            skip is (self appendUntilStringEndWithEscape: True fromIndex: iv inString: json toBuffer: buffer).
+            iv +=: (self appendUntilStringEndWithEscape: True fromIndex: iv inString: json toBuffer: buffer).
             True continue.
         },
         case: '['
@@ -124,24 +103,19 @@ var Json is Object cnew: {
     type = String ifTrue: {
       json length = 2 ifTrue: { ^''. }.
       var buffer is ''.
-      var skip is 0.
-      1 to: json length - 1 step: 1 do: {:i
-        skip > 0 ifTrue: {
-          skip -=: 1.
-          True continue.
-        }.
+      1 to: json length - 1 step: 1 do: {:&i
         (json @ i = '\\') & (i < json length - 2) ifTrue: {
           var j is '"\\nrtbf/' indexOf: json @ (i + 1).
           j > 0 ifTrue: {
             buffer +=: '"\\\n\r\t\b\f/' @ j.
-            skip is 1.
+            i +=: 1.
             True continue.
           }.
           (json @ (i + 1) = 'u') & (i < json length - 6) ifTrue: {
             {
               var c is '\'\\u' + (json from: i + 2 length: 4) toNumber.
               buffer +=: (c + '\'') eval.
-              skip is 5.
+              i +=: 5.
               True continue.
             } catch: {}, run.
           }.
