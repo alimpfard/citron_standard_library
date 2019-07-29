@@ -37,7 +37,7 @@ Colors on: 'paint:options:' do: {:str:options
   ^(my mode = 0) | (options count = 0)
     either: {\ str toString }
     or: {
-      (options count = 1) & (Reflect isObject: options @ 0 linkedTo: Array) ifTrue: { options is options head. }.
+      (options count = 1) & (Reflect isObject: options @ 0 linkedTo: Array) ifTrue: {  }.
       ^(cache at: options) + (str toString) + const NOTHING.
     }.
 }.
@@ -63,7 +63,7 @@ Colors on: 'color' do: {:*options
                 }.
               }.
         }, case: 'Array' do: {
-            (option count = 3) & (option fmap: {:v ^Reflect isObject: v linkedTo: Number.}, all) ifTrue: {
+            (option count = 3) & (option all: {:v ^Reflect isObject: v linkedTo: Number.}) ifTrue: {
               mix push: (var x is Colors message: 'rgb' arguments: option + [color_seen]).
               color_seen is \set.
             }, else: {
@@ -127,6 +127,13 @@ Colors on: 'rgb_to_ansi:' do: {:red:green:blue:use_bright
     ret is '%s;1' % [(ANSI_COLORS at: ansi_color)].
   }.
   ^ret.
+}.
+
+Colors on: 'rgb_to_256:' do: {:rgb
+  # round(36 * (r * 5) + 6 * (g * 5) + (b * 5) + 16)
+  ^'8;5;%s' % [
+    ((rgb @ 0 / 256 * 5 * 36) + (rgb @ 1 / 256 * 6 * 36) + (rgb @ 2 / 256 * 5 * 36) + 16) round
+  ].
 }.
 
 Colors on: 'rgb_color_distance:color:' do: {:rgb1:rgb2
