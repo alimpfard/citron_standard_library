@@ -14,7 +14,7 @@ var ast2ctrcode is {:self:ast:curindent:options
     },
     case: 'LTRSTRING' do: {
       var value is ast value.
-      ^'\'%s\'' % [value escapeAsciiControls escape: '\'\n'].
+      ^'\'%s\'' % [value escape: '\n'].
     },
     case: 'LTRNIL' do: {
       ^'Nil'.
@@ -37,12 +37,20 @@ var ast2ctrcode is {:self:ast:curindent:options
     case: 'EXPRMESSAGE' do: {
       var rec is self[ast @ 0, curindent, options].
       var ct is ast count.
+      rec = 'me' ifTrue: {
+        (ct > 0) ifTrue: {
+          (ast @ 1) type = 'KWMESSAGE' ifTrue: {
+            rec = ''.
+          }.
+        }.
+      }.
+            
       ct - 1 times: {:i
         var s is ast @ (i + 1).
         var rv is ' ' + self[s, curindent, options].
         (rec length > max_line_length) ifTrue: {
           (rec split: '\n', last) length + rv length > max_line_length ifTrue: {
-            rec +=: '\n'.
+            rec +=: '\n' + (indent_s * curindent).
           }.
         }.
         rec +=: rv.
@@ -67,6 +75,10 @@ var ast2ctrcode is {:self:ast:curindent:options
       ^ast value + ' ' + self[ast @ 0, curindent, options].
     },
     case: 'KWMESSAGE' do: {
+      ast value = 'applyAll:' ifTrue: {
+        # single expression, return [...args]
+        ^self[ast @ 0, curindent, options].
+      }.
       var value is ast value split: ':'.
       var code is Array < ''.
       value each: {:i:x
@@ -101,13 +113,14 @@ var ast2ctrcode is {:self:ast:curindent:options
       var ps is ast at: 0.
       var ins is ast at: 1.
       var fmt is ast modifier = 'My' either: '{\\%:L%s%:L\n%s}' or: '{%:L%s%:L\n%s}'.
+      var eindent is (indent_s * (curindent - 1)).
       var cindent is '\n' + (indent_s * (curindent +=: 1)).
       ^fmt % ['',
               (Array new fill: ps count with: \:x ':' + (ps @ x) value),
               cindent,
               cindent,
               (Array new fill: ins count with: \:x self[ins @ x, curindent, options] + '.'),
-              indent_s * (curindent - 1)
+              eindent
             ].
     },
     case: 'PROGRAM' do: {
