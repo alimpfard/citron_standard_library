@@ -58,7 +58,9 @@ var ast2ctrcode is {:self:ast:curindent:options
           pkwmsgs ifTrue: {
             &&rec is '(${{rec}}$)'.
           } ifFalse: {
-            rec +=: ','.
+	    s value !=: 'applyAll:', ifTrue: {
+              rec +=: ','.
+	    }.
           }.
         } ifFalse: {
           pkwmsgs ifTrue: {
