@@ -196,7 +196,11 @@ var ast2ctrcode is {:self:ast:curindent:options
     },
     case: 'EMBED' do: {
       ast modifier = 'Var' ifTrue: {
-        ^ast at: 1, toString.
+        var res is ast at: 1.
+        res isA: AST, ifTrue: {
+          ^self[res, curindent, options].
+        }.
+        ^res toString.
       }.
       var qq is ast at: 0.
       ^'$`(' + self[qq, curindent, options] + ')'.
