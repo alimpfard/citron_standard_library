@@ -40,7 +40,7 @@ var ast2ctrcode is {:self:ast:curindent:options
       rec = 'me' ifTrue: {
         (ct > 0) ifTrue: {
           (ast @ 1) type = 'KWMESSAGE' ifTrue: {
-            rec = ''.
+            rec is ''.
           }.
         }.
       }.
@@ -58,9 +58,9 @@ var ast2ctrcode is {:self:ast:curindent:options
           pkwmsgs ifTrue: {
             &&rec is '(${{rec}}$)'.
           } ifFalse: {
-	    s value !=: 'applyAll:', ifTrue: {
-              rec +=: ','.
-	    }.
+	          s value !=: 'applyAll:', ifTrue: {
+                    rec +=: ','.
+	          }.
           }.
         } ifFalse: {
           pkwmsgs ifTrue: {
@@ -83,16 +83,18 @@ var ast2ctrcode is {:self:ast:curindent:options
       }.
       var value is ast value split: ':'.
       var code is Array < ''.
+      curindent +=: 1.
       value each: {:i:x
-        var tc is '%s: %s ' % [x, self[ast @ i, curindent + 1, options]].
+        var tc is '%s: %s ' % [x, self[ast @ i, curindent, options]].
         var tchead is tc split: '\n', head.
         (code last length + tchead length > max_line_length) ifTrue: { # ...\n <code> <tc>
           code push: ''.
         }.
         code last +=: tc.
       }.
-      var indent is indent_s * (curindent + 1).
+      var indent is indent_s * curindent.
       code is (code join: '\n' + indent).
+      curindent -=: 1.
       ^code rightTrim.
     },
     case: 'EXPRASSIGNMENT' do: {
@@ -106,27 +108,57 @@ var ast2ctrcode is {:self:ast:curindent:options
     case: 'NESTED' do: {
       var code is '('.
       var ps is ast at: 0.
-      var tcode is self[ps, (curindent +=: 1), options].
+      curindent +=: 1.
+      var tcode is self[ps, curindent, options].
       tcode length > max_line_length ifTrue: { code +=: '\n' + (indent_s * curindent). }.
       code +=: tcode.
+      curindent -=: 1.
       ^code + ')'.
     },
     case: 'CODEBLOCK' do: {
       var ps is ast at: 0.
       var ins is ast at: 1.
-      var fmt is ast modifier = 'My' either: '{\\%:L%s%:L\n%s}' or: '{%:L%s%:L\n%s}'.
-      var eindent is (indent_s * (curindent - 1)).
-      var cindent is '\n' + (indent_s * (curindent +=: 1)).
-      ^fmt % ['',
-              (Array new fill: ps count with: \:x ':' + (ps @ x) value),
+      var indentEnd is True.
+      var fmt is ast modifier = 'My' either: {
+        ^ins instrCount = 1 either: {
+          indentEnd is False.
+          var in is ins @ 0.
+          (frozen iskwm is {:self:node
+            node type = 'KWMESSAGE' ifTrue: {
+              ^ True.
+            }.
+            var yes is False.
+            node count times: {:i
+              var n is node @ i.
+              self[n] ifTrue: {
+                yes is True.
+                yes break.
+              }.
+            }.
+            ^yes.
+          })[in] ifTrue: {
+            ^'(\\%:L%s%:L%s)'.
+          } ifFalse: {
+            ^'\\%:L%s%:L%s'.
+          }.
+        } or: '{\\%:L%s%:L\n%s}'.
+      } or: '{%:L%s%:L\n%s}'.
+      var eindent is indent_s * curindent.
+      curindent +=: 1.
+      var cindent is indentEnd either: { ^'\n' + (indent_s * curindent). } or: ' '.
+      var dot is indentEnd either: '.' or: ''.
+      var res is fmt % ['',
+              (Array new fill: ps count with: \:x ':' + ((frozen decodeF is {:node ^node value = '' either: {^self[node, curindent, options].} or: node value.})[ps @ x])),
               cindent,
               cindent,
-              (Array new fill: ins count with: \:x self[ins @ x, curindent, options] + '.'),
+              (Array new fill: ins count with: \:x self[ins @ x, curindent, options] + dot),
               eindent
             ].
+      curindent -=: 1.
+      ^res.
     },
     case: 'PROGRAM' do: {
-      ^(Array new fill: ast count with: \:x self[ast @ x, curindent + 1, options] + '.') join: '\n' + (indent_s * curindent).
+      ^(Array new fill: ast count with: \:x self[ast @ x, curindent, options] + '.') join: '\n' + (indent_s * curindent).
     },
     case: 'ENDOFPROGRAM' do: { ^''. },
     case: 'RETURNFROMBLOCK' do: { ^'^' + self[ast @ 0, curindent, options]. },
@@ -176,7 +208,21 @@ var ast2ctrcode is {:self:ast:curindent:options
       var gencode is ''.
       {
         var pcount is generator count.
-        (Array new fill: pcount with: \:i self[generator @ i, curindent, noptions]) each_v: {:gen
+        (Array new fill: pcount with: {:i
+          var node is generator @ i.
+          node type = 'NESTED' ifTrue: {
+            var candidate is node at: 0.
+            (candidate type = 'EXPRMESSAGE')
+              & (candidate at: 0, type = 'REFERENCE')
+              & (candidate at: 0, value = 'me')
+              & (candidate at: 1, type = 'KWMESSAGE')
+              ifTrue: {
+                noptions put: False at: 'parenthesize_kwmsgs'.
+                ^'(' + self[candidate, curindent, noptions] + ')'.
+              }.
+          }.
+          ^self[node, curindent, noptions].
+        }) each_v: {:gen
           var tgencode is gencode + gen + ', '.
           tgencode split: '\n', last length > max_line_length ifTrue: { tgencode is gencode + '\n' + (indent_s * (curindent + 1)) + gen + ', '. }.
           gencode is tgencode.
@@ -196,7 +242,12 @@ var ast2ctrcode is {:self:ast:curindent:options
         pcount > 0 ifTrue: { predcode is predcode from: 0 to: predcode length - 2. }.
         predcode split: '\n', last length > max_line_length ifTrue: { predcode +=: '\n'. }.
       } catch: { }, run.
-      var exprv is '[${{self[expr, curindent, options]}}$'.
+      var exprv is '['.
+      expr type = 'NESTED' ifTrue: {
+        exprv +=: self[expr @ 0, curindent, options].
+      } ifFalse: {
+        exprv +=: self[expr, curindent, options].
+      }.
       gencode = '' ifFalse: {
         var exprvb is exprv + ''.
         exprv +=: ',, ' + gencode.
