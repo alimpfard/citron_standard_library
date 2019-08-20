@@ -14,7 +14,7 @@ var ast2ctrcode is {:self:ast:curindent:options
     },
     case: 'LTRSTRING' do: {
       var value is ast value.
-      ^'\'%s\'' % [value escape: '\n'].
+      ^'\'%s\'' % [value escape: '\n\''].
     },
     case: 'LTRNIL' do: {
       ^'Nil'.
@@ -44,7 +44,7 @@ var ast2ctrcode is {:self:ast:curindent:options
           }.
         }.
       }.
-            
+
       ct - 1 times: {:i
         var s is ast @ (i + 1).
         var rv is ' ' + self[s, curindent, options].
@@ -163,6 +163,9 @@ var ast2ctrcode is {:self:ast:curindent:options
         ) switch: ast modifier) % [self[ast @ 0, curindent, options]].
     },
     case: 'EMBED' do: {
+      ast modifier = 'Var' ifTrue: {
+        ^ast at: 1, toString.
+      }.
       var qq is ast at: 0.
       ^'$`(' + self[qq, curindent, options] + ')'.
     },
