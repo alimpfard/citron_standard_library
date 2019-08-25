@@ -136,6 +136,10 @@ Colors on: 'rgb_to_256:' do: {:rgb
   ].
 }.
 
+Colors on: 'rgb_to_true:' do: {:rgb
+  ^rgb_to_256: rgb.
+}. # TODO
+
 Colors on: 'rgb_color_distance:color:' do: {:rgb1:rgb2
   ^[rgb1, rgb2] zip foldl: {:acc:x
     ^acc + (((x @ 0) - (x @ 1)) pow: 2).

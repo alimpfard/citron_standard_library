@@ -7,14 +7,14 @@ import Library/Data/Map.
 import Library/Data/Set/HashSet: 'HashSet'.
 import Library/AST/ast2ctrcode: 'ast2ctrcode'.
 
-var args is [(Program argument: i),, (Generator from: 0 to: Program argCount)].
+var args is [(Program argument: i),, (i: (Generator from: 0 to: Program argCount))].
 
 var syn is args contains: '--no-highlight'.
 var livesyn is syn not & (args contains: '--no-live', not).
 
 syn is syn not.
 
-Colors mode: True.
+Colors mode: 256.
 
 #:declare lazyev and
 var and is {:a:b a evaluate ifFalse: {^False.}. ^b evaluate.}.

@@ -1,0 +1,17 @@
+Object on: 'wrapped' do: {:self
+  ^Object cnew: {
+    &object => self.
+    on: 'toString' do: {
+      ^'wrapped<' + my object + '>'.
+    }.
+    on: 'type' do: {
+      ^'Wrapped[' + my object type + ']'.
+    }.
+    on: 'get' do: {
+      ^my object.
+    }.
+    on: 'set:' do: {:x
+      &object => x.
+    }.
+  }.
+}.
