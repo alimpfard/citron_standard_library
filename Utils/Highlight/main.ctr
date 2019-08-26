@@ -6,29 +6,25 @@ import Library/Data/SwitchCase: 'blockCase'.
 var Highlight is Object new.
 Highlight on: 'highlight:' do: {:code:html
   # preprocess the code to get rid of pesky comments
-  code is code findPattern: ?>'((\\[^\n]|[^''\n])*)'|\#(.*?)\r?\n<? do: {:groups
-    var cv is groups @ 0.
-    cv startsWith: '#', ifTrue: {
-      ^'\n'.
-    }.
-    ^cv.
-  }.
-  var space is ' '.
-  var nocolor is Colors backendType = \HTML either: { ^Colors white. } or: ''.
-  var Tokens is AST feedLexer: code.
-  var token is AST token.
-  var done is False.
-  var last_toc is 'FIN'.
-  var messageAcceptors is ['BLOCKCLOSE', 'BOOLEANNO', 'BOOLEANYES', 'CHAIN', 'NIL', 'NUMBER', 'PARCLOSE', 'QUOTE', 'REF', 'TUPCLOSE'].
-  var last_end is 0.
-  var returned is ''.
-  {^done.} whileFalse: {
-    var this_thing is ''.
-    var rlen is Colors stripColors: returned, length.
-    var color is ''.
-    var last_toc_override is Nil.
-    var after_color is ''.
-    var noquote is False.
+  code is code ~ ?>s/('((\\[^\n]|[^''\n])*)')|(\#(.*?)\r?\n)/$1$4/g<?.
+  # Pen writeln: code.
+  ^Generator repeat: Nil, fmap: {:x ^AST token. },
+  foldl: {:e_values:token
+    e_values at: 'done', break.
+
+    var &last_toc         is e_values @ 'last_toc'.
+    var &returned         is e_values @ 'returned'.
+    var &last_end         is e_values @ 'last_end'.
+    var &space            is e_values @ 'space'.
+    var &messageAcceptors is e_values @ 'messageAcceptors'.
+    var &done             is e_values @ 'done'.
+
+    var &this_thing is ''.
+    var &rlen is Colors stripColors: returned, length.
+    var &color is ''.
+    var &last_toc_override is Nil.
+    var &after_color is ''.
+    var &noquote is False.
 
     $!((frozen _ is blockCase {
       'RET' => {
@@ -127,7 +123,7 @@ Highlight on: 'highlight:' do: {:code:html
       },
       'QUOTE' => {
         this_thing is ''.
-        noquote not either: {
+        noquote not ifTrue: {
           var string is AST getlexbuf.
           var in_escape is False.
           var begin is '\''.
@@ -152,10 +148,10 @@ Highlight on: 'highlight:' do: {:code:html
             #   True continue.
             # }.
             (c = '\\') ifTrue: {
-              in_escape either: {
+              in_escape ifTrue: {
                 in_escape is False.
                 justInEscape is True.
-              } or: {
+              } ifFalse: {
                 justInEscape is True.
                 in_escape is True.
               }.
@@ -182,7 +178,7 @@ Highlight on: 'highlight:' do: {:code:html
           # Pen writeln: '+%d:%d, %s => l%d b%d' % [token @ 2, AST lexpos, this_thing, this_thing length, this_thing bytes].
           color is Colors yellow.
           this_thing is begin + this_thing.
-        } or: {
+        } ifFalse: {
           this_thing is '\''.
           color is Colors magenta.
         }.
@@ -204,7 +200,7 @@ Highlight on: 'highlight:' do: {:code:html
           this_thing is token @ 1.
           last_toc_override is 'PARAMN'.
         } ifFalse: {
-          var next is AST token.
+          var &next is AST token.
           (next @ 0 !=: 'FIN') ifTrue: {AST lexPutBack.}.
           var tok is token @ 1.
           (next @ 0 = 'COLON') ifTrue: {
@@ -228,7 +224,12 @@ Highlight on: 'highlight:' do: {:code:html
                 # token put: (token @ 2) at: 2.
                 token put: (tok + ':') at: 1.
               }.
-              color is (Colors bold) + (Colors bright) + (tok @ 0 = '\\' either: Colors green or: Colors magenta).
+              color is (Colors bold) + (Colors bright).
+              tok @ 0 = '\\' ifTrue: {
+                color +=: Colors green.
+              } ifFalse: {
+                color +=: Colors magenta.
+              }.
               after_color is (Colors bold_off) + (Colors bright_off).
               this_thing is tok.
             } ifFalse: {
@@ -288,18 +289,43 @@ Highlight on: 'highlight:' do: {:code:html
       }
     }) applyTo: token @ 0).
 
-    returned +=: nocolor + (space * ((token @ 2) - last_end - (token @ 3))).
-    returned +=: color + this_thing + (Colors default) + (after_color).
-    #Pen writeln: [token @ 0, last_toc, last_toc_override].
+    returned +=: (space * ((token @ 2) - last_end - (token @ 3))).
+    returned +=: color + this_thing + Colors default + after_color.
+
     (token @ 0 = 'CHAIN') & (last_toc = 'REF') ifTrue: { last_toc_override is 'NOT-CHAIN'. }.
-    last_toc is last_toc_override or: token @ 0.
+    last_toc_override isNil ifTrue: {
+      last_toc is token @ 0.
+    } ifFalse: {
+      last_toc is last_toc_override.
+    }.
     last_end is token @ 2.
     var lin is AST lexline.
-    token is AST token.
     returned +=: '\n' * (AST lexline - lin).
-  }.
-  #Pen line brk.
-  ^returned.
+
+    e_values put: token at: 'token'.
+    e_values put: done at: 'done'.
+    e_values put: last_toc at: 'last_toc'.
+    e_values put: returned at: 'returned'.
+    e_values put: last_end at: 'last_end'.
+    e_values put: space at: 'space'.
+    e_values put: messageAcceptors at: 'messageAcceptors'.
+    ^e_values.
+  } accumulator: (
+    HashMap new
+     put: ' ' at: 'space',
+     put: (AST feedLexer: code) at: 'Tokens',
+     put: False at: 'done',
+     put: 'FIN' at: 'last_toc',
+     put: [
+      'BLOCKCLOSE', 'BOOLEANNO',
+      'BOOLEANYES', 'CHAIN', 'NIL',
+      'NUMBER', 'PARCLOSE', 'QUOTE', 'REF',
+      'TUPCLOSE'
+     ]
+     at: 'messageAcceptors',
+     put: 0 at: 'last_end',
+     put: '' at: 'returned'
+   ), at: 'returned'.
 }.
 
 Highlight on: 'highlight:html:' do: {:h:b ^me message: 'highlight:' arguments: [h,b]. }.

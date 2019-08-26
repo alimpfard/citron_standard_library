@@ -191,7 +191,7 @@ var load-and-apply-theme is Tcl fnOf: {\:code :obj
 import Library/Utils/Highlight.
 var highlight is Tcl fnOf: {:txt
   ^txt findPattern: ?>^([^#]+)(.*)$<? do: {:groups
-    ^(Highlight highlight: groups @ 1 html: False) + (Colors paint: groups @ 2 options: [[100, 100, 100]]).
+    ^(Highlight highlight: groups @ 1) + (Colors paint: groups @ 2 options: [[100, 100, 100]]).
   }.
 }.
 
