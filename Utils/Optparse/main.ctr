@@ -1,0 +1,307 @@
+# [Optparse] define: { p }
+# [p] on: [OptName:String] (withShortname: [OptShortName:String]) withDescription: [description:String] do: [Block]
+# OptName determines the type of the option:
+#    <name>. - executed as seen
+#    <name>! - must be present (required option)
+#    <name>= - option takes a value
+#    <name>* - option is only counted, and the count is given to the block
+#
+# OptShortName is automatically derived from the OptName's characters
+#   if the given opt shortname exists, the next character is tried until
+#   OptName runs out, then no opt shortname is given to the option
+#   Passing Nil causes the opt to not have a short name
+#
+var Optparse is Object cnew: {
+  on: 'newWithErrorFunction:' do: {:erf
+    ^cnew: {
+      optionMap => HashMap new.
+      shortnameMap => HashMap new.
+      shortnameReverseMap => HashMap new.
+      errorFunc => erf.
+      banner: './program - runs fancy shit'.
+    }.
+  }.
+  genAccessors: ['banner'].
+  on: 'tryRegisterOption:withShortname:andDescription:do:' do: {:optname:shortname:desc:blk
+    var immediate is optname endsWith: '.'.
+    optname is optname ~ 's/\\.$//'.
+    var required is optname endsWith: '!'.
+    optname is optname ~ 's/\\!$//'.
+    var takes_value is optname endsWith: '='.
+    optname is optname ~ 's/=$//'.
+    var counts is takes_value not.
+    counts ifTrue: {
+      counts is optname endsWith: '*'.
+      optname is optname ~ 's/\\*$//'.
+    }.
+    my optionMap contains: optname, ifTrue: {
+      thisBlock error: 'Option $$optname already defined'.
+    }.
+    my optionMap put: [
+      desc,
+      takes_value,
+      counts,
+      required,
+      immediate,
+      blk
+    ] at: optname.
+    shortname isNil ifFalse: {
+      shortname = \Assign ifTrue: {
+        var shortnameMap is my shortnameMap.
+        var i is 0.
+        shortname is optname @ 0.
+        { ^shortnameMap contains: shortname. } whileTrue: {
+          optname length <=: i + 1, break.
+          shortname is optname @ (i +=: 1).
+        }.
+      }.
+      shortname trim = '' ifFalse: {
+        my shortnameMap contains: shortname, ifFalse: {
+          my shortnameReverseMap put: shortname at: optname.
+          my shortnameMap put: optname at: shortname.
+        }.
+      }.
+    }.
+  }.
+  on: 'parse:' do: {:argv
+    argv isNil ifTrue: {
+      argv is Array new fill: Program argCount - 1 with: \:x Program argument: x + 1.
+    }.
+    var errorFunc is my errorFunc.
+    var args is Generator elementsOf: argv.
+    var programName is args next.
+    var helpformat is Map new put: programName at: 'program_name'.
+    var optmap is my optionMap.
+    var shortnameMap is my shortnameMap.
+    var requiredOpts is HashMap new.
+    var vcounts is Map new.
+    var vvalues is Map new.
+    optmap each: {:k:v
+      v @ 3 ifTrue: {
+        requiredOpts put: True at: k.
+      }.
+    }.
+    args each: {:idx:arg
+      arg startsWith: '--', ifTrue: {
+        arg is arg skip: 2.
+        var value is Nil.
+        arg contains: '=', ifTrue: {
+          value is arg split: '=' max: 1.
+          arg is value head.
+          value is value last.
+        }.
+        var vals is optmap at: arg.
+        vals isNil ifTrue: {
+          errorFunc applyTo: 'argument $$idx (--${{arg}}$) makes no sense to me'.
+        }.
+        var takes_value is vals @ 1.
+        var counts is vals @ 2.
+        var immediate is vals @ 4.
+        var handler is vals @ 5.
+        counts ifTrue: {
+          vcounts contains: arg, ifFalse: {
+            vcounts put: 0 at: arg.
+          }.
+          vcounts @ arg +=: 1.
+        } ifFalse: {
+          takes_value ifTrue: {
+            value isNil ifTrue: {
+              value is args next.
+              value isNil ifTrue: {
+                errorFunc applyTo: 'argument $$idx (--${{arg}}$) expects an argument, but none was provided'.
+              }.
+            }.
+            immediate ifFalse: {
+              vvalues put: [handler, value] at: arg.
+            }.
+          }.
+          immediate ifTrue: {
+            handler[value].
+          }.
+        }.
+        requiredOpts deleteAt: arg.
+      } ifFalse: {
+        arg startsWith: '-', ifTrue: {
+          arg is arg skip: 1.
+          {:self # to recurse :p
+            arg = '' ifTrue: {
+              ^Nil.
+            }.
+            var value is Nil.
+            arg length > 1 ifTrue: {
+              value is arg skip: 1.
+              arg is arg @ 0.
+            }.
+            var varg is shortnameMap at: arg.
+            varg isNil ifTrue: {
+              errorFunc applyTo: 'argument $$idx (-${{arg}}$) makes no sense to me'.
+            }.
+            var vals is optmap at: varg.
+            vals isNil ifTrue: {
+              errorFunc applyTo: 'argument $$idx (--${{arg}}$) makes no sense to me'.
+            }.
+            var takes_value is vals @ 1.
+            var counts is vals @ 2.
+            var immediate is vals @ 4.
+            var handler is vals @ 5.
+            value isNil | takes_value ifFalse: {
+              var arg is value.
+              self[].
+            }.
+            counts ifTrue: {
+              vcounts contains: varg, ifFalse: {
+                vcounts put: 0 at: varg.
+              }.
+              vcounts @ varg +=: 1.
+            } ifFalse: {
+              takes_value ifTrue: {
+                value isNil ifTrue: {
+                  value is args next.
+                  value isNil ifTrue: {
+                    errorFunc applyTo: 'argument $$idx (-${{arg}}$) expects an argument, but none was provided'.
+                  }.
+                }.
+                immediate ifFalse: {
+                  vvalues put: [handler, value] at: varg.
+                }.
+              }.
+              immediate ifTrue: {
+                handler[value].
+              }.
+            }.
+            requiredOpts deleteAt: varg.
+          } run.
+        } ifFalse: {
+          errorFunc applyTo: 'argument $$idx (${{arg}}$) came as a complete surprise'.
+        }.
+      }.
+    }.
+    requiredOpts count !=: 0, ifTrue: {
+      var sopts is Array new.
+      requiredOpts each: {:k sopts push: k. }.
+      errorFunc applyTo: 'required option(s) [%L] were not provided' % [sopts].
+    }.
+    vcounts each: {:k:c
+      (optmap @ k @ 5) [c].
+    }.
+    vvalues each: {:o:hv
+      hv head [hv last].
+    }.
+    ^createObject: vvalues andCounts: vcounts.
+  }.
+  learn: 'parse' means: 'parse:'.
+  on: 'createObject:andCounts:' do: {:vs:cs
+    var optmap is my optionMap.
+    ^Object cnew: {:self
+      keylist => var kl is Array new.
+      optmap each: {:k
+        self on: k do: { ^Nil. }.
+        kl push: k.
+      }.
+      vs each: {:k:v
+        v is v @ 1.
+        self on: k do: {\ v }.
+      }.
+      cs each: {:k:v
+        self on: k do: {\ v }.
+      }.
+      on: 'toString' do: {:self
+        var kl is my keylist.
+        ^'OptArguments {%L}' % [
+          [kl, kl fmap: \:x self message: x arguments: []] zip fmap: \:x x join: ' => '
+        ].
+      }.
+    }.
+  }.
+  on: 'summarise' do: {
+    var summary is Array new.
+    var simple is ''.
+    var shortrev is my shortnameReverseMap.
+    my optionMap each: {:opt:vals
+      var desc is vals @ 0.
+      var takes_value is vals @ 1.
+      var counts is vals @ 2.
+      var req is vals @ 3.
+      # var imm is vals @ 4.
+      var short is shortrev @ opt.
+      var eqv is (takes_value either: {\ '=value' } or: '').
+      var eqvs is short isNil either: '' or: (takes_value either: 'value' or: '').
+
+      simple +=: (req either: ' --%s%s%s%s' or: ' [--%s%s%s%s]') % [
+        opt,
+        eqv,
+        (short isNil not either: '|-$$short' or: ''),
+        eqvs
+      ].
+      summary push: '--%s%s%s\t\t%s%s' % [
+        opt,
+        (short isNil not either: ', -$$short' or: ''),
+        (req either: ' !' or: ''),
+        desc,
+        (takes_value either: {\ '\t\t--${{opt}}$=value, --$$opt value' } or: {
+          ^counts either: '\t\t(*)' or: ''.
+        })
+      ].
+    }.
+    ^me banner + '\n\n%{program_name}' + simple + '\n\n  ' + (summary join: '\n  ').
+  }.
+  on: 'define:' do: {:self:block
+    var context is Object cnew: {
+      parser => self.
+      on: 'on:withDescription:do:' do: {:optname:desc:blk
+        my parser tryRegisterOption: optname
+         withShortname: \Assign
+         andDescription: desc
+         do: blk.
+      }.
+      on: 'on:withShortname:withDescription:do:' do: {:optname:shortname:desc:blk
+        my parser tryRegisterOption: optname
+         withShortname: shortname
+         andDescription: desc
+         do: blk.
+      }.
+    }.
+    block[context].
+    tryRegisterOption: 'help.'
+    withShortname: 'h'
+    andDescription: 'displays help'
+    do: {
+      Pen writeln: (const self summarise formatMap: helpformat).
+      Program exit.
+    }.
+  }.
+}.
+
+# var parser is Optparse newWithErrorFunction: {:err
+#   Pen red write: 'Error: ', resetColor writeln: err.
+#   Program exit: 1.
+# }.
+# parser define: {:p
+#   p on: 'test=' withDescription: 'sets test' do: {:value
+#     Pen writeln: 'test = $$value'.
+#   },
+#   on: 'shit*' withDescription: 'counts shits' do: {:count
+#     Pen writeln: '$$count shits given'.
+#   },
+#   on: 'poop*!' withDescription: 'must poop' do: {:count
+#     Pen writeln: 'shit, there\'s no other choice! pooped $$count times'.
+#   },
+#   on: 'ploop=' withDescription: 'what ploop' do: {:what
+#     Pen writeln: 'loop $$what'.
+#   },
+#   on: 'ploop1=' withDescription: 'what ploop' do: {:what
+#     Pen writeln: 'loop $$what'.
+#   },
+#   on: 'ploop2=' withDescription: 'what ploop' do: {:what
+#     Pen writeln: 'loop $$what'.
+#   },
+#   on: 'ploo=' withDescription: 'what ploop' do: {:what
+#     Pen writeln: 'loop $$what'.
+#   },
+#   on: 'ploop3=.' withDescription: 'what ploop' do: {:what
+#     Pen writeln: 'loop $$what'.
+#   }.
+# }.
+#
+# var obj is parser parse.
+# Pen writeln: obj.
