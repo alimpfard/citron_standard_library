@@ -9,6 +9,10 @@ var FileDes is Object cnew: {
   }.
   on: 'new' do: { thisBlock error: 'Unknown method FileDes::\'new\' called'. }.
   on: 'descriptor' do: { ^my fd. }.
+  on: 'close' do: {
+      const FileDesInternals close: my fd.
+      fd => 0.
+  }.
   on: 'read' do: {
     ^const FileDesInternals readFrom: my fd.
   }.
