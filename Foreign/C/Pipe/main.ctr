@@ -21,4 +21,4 @@ var _pipe is {
   ^[(FileDes new: (arr at: i)),, (i: arr offsets)].
 }.
 
-pipe is _pipe.
+var pipe is _pipe.
