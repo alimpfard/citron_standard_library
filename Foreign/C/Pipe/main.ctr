@@ -18,7 +18,10 @@ var _pipe is {
   retv !=: 0, ifTrue: {
     thisBlock error: 'pipe returned $$retv'.
   }.
-  ^[(FileDes new: (arr at: i)),, (i: arr offsets)].
+
+  var fios is [(arr at: i),, (i: arr offsets)].
+
+  ^[(Filedes new: fd),, (fd: fios)].
 }.
 
 var pipe is _pipe.

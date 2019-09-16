@@ -19,7 +19,15 @@ var FileDesInternals is Object cnew: {
   close_sym => library close.
 
   var read  is {:fd:buf:size ^my cif call: my read_sym  withArgs: [fd, buf, size].}.
-  var write is {:fd:buf:size ^my cif call: my write_sym withArgs: [fd, buf, size].}.
+  var write is {:fd:buf:size
+    buf is CTypes fromString: buf.
+    var res is my cif call: my write_sym withArgs: [fd, buf, size].
+    buf destruct.
+    res < 0 ifTrue: {
+      thisBlock error: 'write => $$res'.
+    }.
+    ^res.
+  }.
   var close is {:fd
     var res is my closecif call: my close_sym withArgs: [fd].
     res !=: 0, ifTrue: {

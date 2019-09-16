@@ -1,0 +1,25 @@
+import
+  Library/Foreign/C/Pipe: 'pipe'.
+  # Library/Foreign/C/Poll: 'poll'.
+
+# One-way channel
+var Channel is Object cnew: {
+  on: 'new' do: {
+    # Channel new => {input_side, output_side}
+    ^Channel cnew: {
+      var pipes is pipe[].
+      input => pipes @ 1.
+      output => pipes @ 0.
+    }.
+  }.
+  on: 'send:' do: {:&obj
+    ^my input write: obj toString.
+  }.
+  on: 'receive' do: {
+    ^my output read.
+  }.
+  on: 'close' do: {
+    my input close.
+    my output close.
+  }.
+}.

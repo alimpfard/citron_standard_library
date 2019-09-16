@@ -1,0 +1,11 @@
+import Library/Control/Channel: 'Channel'.
+import Library/Data/Json.
+
+var JSONChannel is Channel cnew: {
+  on: 'send:' do: {:&obj
+    my input write: (Json serialize: obj).
+  }.
+  on: 'receive' do: {
+    ^Json parse: my output read.
+  }.
+}.

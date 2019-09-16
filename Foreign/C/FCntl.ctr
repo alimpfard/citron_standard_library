@@ -1,0 +1,31 @@
+import
+  Library/Foreign/Interop/C
+  Library/Data/SwitchCase
+.
+
+#:language XFrozen
+
+Inject
+  importFunctionsOrTypes: ['fcntl']
+  fromHeaders: ['unistd.h', 'fcntl.h']
+  andLibraries: ['c']
+.
+
+var _fcntl is Object cnew: {
+  fcntl => fcntl.
+
+  on: 'new' do: {}.
+  on: 'cnew:' do: {}.
+
+  on: 'setFlags:for:' do: {:fl:fd
+    var flag is (frozen _ is Number
+      case: \Append do: { ^0c2000. },
+      case: \Async do: { ^0c20000. },
+      case: \NonBlock do: { ^0c4000. }
+    ) switch: fl.
+
+    Pen writeln: my fcntl[fd, 4, flag].
+  }.
+}.
+
+var fcntl is _fcntl.
