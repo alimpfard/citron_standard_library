@@ -36,5 +36,10 @@ var clear_next_line is {:n
 
 var write_next_line is {:text
   var old_cursor_position is const get_term_cursor_pos run.
-  Pen write: ('\x1b[%d;%dH\x1b[2K' % [old_cursor_position head + 1, 0]) + text + '\x1b[%d;%dH' % old_cursor_position.
+  Pen write: ('\x1b[%d;%dH\x1b[2K' % [old_cursor_position head + 1, 0]) + text + ('\x1b[%d;%dH' % old_cursor_position).
+}.
+
+var move_cursor is {:down:right
+  var old_cursor_position is const get_term_cursor_pos run.
+  Pen write: '\x1b[%d;%dH' % [old_cursor_position head + down, old_cursor_position last + right].
 }.
