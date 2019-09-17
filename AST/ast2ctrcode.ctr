@@ -3,10 +3,16 @@ import Library/Data/SwitchCase.
 #:language XFrozen
 
 var ast2ctrcode is {:self:ast:curindent:options
-  options is options or: Map.
+  options is options or: {^Map new.}.
   var max_line_length is options at: 'max_line_length', or: 80.
   var indent_s        is ' ' * (options at: 'indent_length', or: 2).
   var pkwmsgs         is options at: 'parenthesize_kwmsgs', or: False.
+  var inrawcontext    is options at: 'in_call_context', or: 0.
+  options
+    put: max_line_length at: 'max_line_length',
+    put: pkwmsgs at: 'parenthesize_kwmsgs',
+    put: inrawcontext at: 'in_call_context'.
+
   curindent is curindent or: 0.
   ^(frozen __ is
     case: 'LTRNUM' do: {
@@ -79,6 +85,7 @@ var ast2ctrcode is {:self:ast:curindent:options
     case: 'KWMESSAGE' do: {
       ast value = 'applyAll:' ifTrue: {
         # single expression, return [...args]
+        options put: 1 at: 'in_call_context'.
         ^self[ast @ 0, curindent, options].
       }.
       var value is ast value split: ':'.
@@ -119,8 +126,10 @@ var ast2ctrcode is {:self:ast:curindent:options
       var ps is ast at: 0.
       var ins is ast at: 1.
       var indentEnd is True.
+      var newline is True.
       var fmt is ast modifier = 'My' either: {
         ^ins instrCount = 1 either: {
+          newline is False.
           indentEnd is False.
           var in is ins @ 0.
           (frozen iskwm is {:self:node
@@ -139,7 +148,9 @@ var ast2ctrcode is {:self:ast:curindent:options
           })[in] ifTrue: {
             ^'(\\%:L%s%:L%s)'.
           } ifFalse: {
-            ^'\\%:L%s%:L%s'.
+            var noss is '\\%:L%s%:L%s'.
+            var ss is '{\\%:L%s%:L%s}'.
+            ^(ps count = 0) | (ins count > 1) either: ss or: noss.
           }.
         } or: '{\\%:L%s%:L\n%s}'.
       } or: '{%:L%s%:L\n%s}'.
@@ -152,7 +163,7 @@ var ast2ctrcode is {:self:ast:curindent:options
               cindent,
               cindent,
               (Array new fill: ins count with: \:x self[ins @ x, curindent, options] + dot),
-              eindent
+              newline either: eindent or: ''
             ].
       curindent -=: 1.
       ^res.
@@ -163,15 +174,38 @@ var ast2ctrcode is {:self:ast:curindent:options
     case: 'ENDOFPROGRAM' do: { ^''. },
     case: 'RETURNFROMBLOCK' do: { ^'^' + self[ast @ 0, curindent, options]. },
     case: 'IMMUTABLE' do: {
-      var code is Array < '['.
       var ps is ast at: 0.
       var pcount is ps count.
       var newlined is False.
-      (Array new fill: pcount with: \:i self[ps @ i, curindent, options]) each_v: {:gen
+      var braced is False.
+      inrawcontext +=: 1.
+      var elems is Array new fill: pcount with: {\:i
+        self[ps @ i, curindent, options].
+      }.
+      inrawcontext -=: 1.
+      elems all: {\:x x startsWith: '.'}, & (elems count > 0) ifTrue: {
+        braced is True.
+        elems fmap!: {:&x
+          ^x skip: 1.
+        }.
+      } ifFalse: {
+        braced is False.
+        elems fmap!: {:&x
+          x startsWith: '.', ifTrue: {
+            ^'$(' + (x skip: 1) + ')'.
+          } ifFalse: {
+            ^x.
+          }.
+        }.
+      }.
+      var sbrac is braced either: '{' or: '['.
+      var ebrac is braced either: '}' or: ']'.
+      var code is Array < (sbrac + '').
+      elems each_v: {:&gen
         var tcode is code last + gen + ', '.
         tcode split: '\n', last length > max_line_length ifTrue: {
           code unshift: (indent_s * (curindent + 1)) + (code shift skip: 1).
-          code unshift: '['.
+          code unshift: sbrac.
           code push: (indent_s * (curindent + 1)) + gen + ', '.
           newlined is True.
         } ifFalse: { code last +=: gen + ', '. }.
@@ -179,20 +213,26 @@ var ast2ctrcode is {:self:ast:curindent:options
       pcount > 0 ifTrue: { code put: (code last from: 0 to: code last length - 2) at: code count - 1. }.
       code last split: '\n', last length > max_line_length ifTrue: { code push: ''. }.
       newlined ifTrue: {
-        code push: (indent_s * curindent) + ']'.
+        code push: (indent_s * curindent) + ebrac.
       } ifFalse: {
-        code last +=: ']'.
+        code last +=: ebrac.
       }.
       ^code filter_v: \:x x trim length, join: '\n'.
     },
     case: 'RAW' do: {
-      ^((frozen _ is
-          case: 'None' do: {\ '%s'},
-          case: 'My'   do: {\ '$(%s)'},
-          default:         {
-            ^'%s'.
-          }
+      var res is Nil.
+      inrawcontext = 2 ifTrue: {
+        res is '.' + self[ast @ 0, curindent, options].
+      } ifFalse: {
+        res is ((frozen _ is
+            case: 'None' do: {\ '%s'},
+            case: 'My'   do: {\ '$(%s)'. },
+            default:         {
+              ^'%s'.
+            }
         ) switch: ast modifier) % [self[ast @ 0, curindent, options]].
+      }.
+      ^res.
     },
     case: 'EMBED' do: {
       ast modifier = 'Var' ifTrue: {
@@ -248,7 +288,7 @@ var ast2ctrcode is {:self:ast:curindent:options
       } catch: { }, run.
       var exprv is '['.
       expr type = 'NESTED' ifTrue: {
-        exprv +=: self[expr @ 0, curindent, options].
+        exprv +=: self[expr @ 0, curindent, expr].
       } ifFalse: {
         exprv +=: self[expr, curindent, options].
       }.
