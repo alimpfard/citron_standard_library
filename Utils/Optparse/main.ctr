@@ -76,13 +76,13 @@ var Optparse is Object cnew: {
     var errorFunc is mkerrfunc[my errorFunc].
     var convert_to_type is {:&val:&type
         # value : string
-        type = Number ifTrue: {
+        type isA: Number, ifTrue: {
             ^val toNumber.
         }.
-        type = Boolean ifTrue: {
+        type isA: Boolean, ifTrue: {
             ^val at: 0, lower = 't'.
         }.
-        type = String ifTrue: { ^val. }.
+        type isA: String, ifTrue: { ^val. }.
         type isA: Array, ifTrue: {
             var elty is type empty? either: String or: { ^type head. }.
             ^val reSplit: '\\s+', fmap!: {:&x ^convert_to_type[x, elty]. }.
@@ -97,6 +97,7 @@ var Optparse is Object cnew: {
     var requiredOpts is HashMap new.
     var vcounts is Map new.
     var vvalues is Map new.
+    var provided is Map new.
     optmap each: {:k:v
       v @ 3 ifTrue: {
         requiredOpts put: True at: k.
@@ -114,6 +115,8 @@ var Optparse is Object cnew: {
         var vals is optmap at: arg.
         vals isNil ifTrue: {
           errorFunc applyTo: 'argument $$idx (--${{arg}}$) makes no sense to me'.
+        } ifFalse: {
+            provided put: True at: arg.
         }.
         var takes_value is vals @ 1.
         var counts is vals @ 2.
@@ -162,7 +165,10 @@ var Optparse is Object cnew: {
             var vals is optmap at: varg.
             vals isNil ifTrue: {
               errorFunc applyTo: 'argument $$idx (--${{arg}}$) makes no sense to me'.
+            } ifFalse: {
+                provided put: True at: varg.
             }.
+
             var takes_value is vals @ 1.
             var counts is vals @ 2.
             var immediate is vals @ 4.
@@ -214,15 +220,17 @@ var Optparse is Object cnew: {
       var arg is o.
       hv head [hv last].
     } catch: errorFunc).
-    ^createObject: vvalues andCounts: vcounts.
+    ^createObject: vvalues andCounts: vcounts andProvided: provided.
   }.
   learn: 'parse' means: 'parse:'.
-  on: 'createObject:andCounts:' do: {:vs:cs
+  on: 'createObject:andCounts:andProvided:' do: {:vs:cs:provided
     var optmap is my optionMap.
     ^Object cnew: {:self
       keylist => var kl is Array new.
       optmap each: {:k
         self on: k do: { ^Nil. }.
+        var contains is provided contains: k.
+        self on: k + '?' do: {\ ^contains. }.
         kl push: k.
       }.
       vs each: {:k:v
@@ -250,9 +258,10 @@ var Optparse is Object cnew: {
       var counts is vals @ 2.
       var req is vals @ 3.
       # var imm is vals @ 4.
+      var type is vals @ 6.
       var short is shortrev @ opt.
-      var eqv is (takes_value either: {\ '=value' } or: '').
-      var eqvs is short isNil either: '' or: (takes_value either: 'value' or: '').
+      var eqv is (takes_value either: {\ '=%s' % [type = String either: 'value' or: '<' + type type + '>']. } or: '').
+      var eqvs is short isNil either: '' or: (takes_value either: ('%s' % [type = String either: 'value' or: '<' + type type + '>']) or: '').
 
       simple +=: (req either: ' --%s%s%s%s' or: ' [--%s%s%s%s]') % [
         opt,
@@ -265,7 +274,7 @@ var Optparse is Object cnew: {
         (short isNil not either: ', -$$short' or: ''),
         (req either: ' !' or: ''),
         desc,
-        (takes_value either: {\ '\t\t--${{opt}}$=value, --$$opt value' } or: {
+        (takes_value either: {\ '\t\t--${{opt}}$=%s, --$$opt %s' % ([type = String either: 'value' or: '<' + type type + '>'] * 2). } or: {
           ^counts either: '\t\t(*)' or: ''.
         })
       ].
@@ -314,6 +323,13 @@ var Optparse is Object cnew: {
       Program exit.
     }.
   }.
+}.
+
+var parseArguments is Object cnew: {
+    errf => {}.
+    optparse => Optparse.
+    on: 'withErrorFunction:' do: {:errf my errf is errf. }. 
+    on: 'as:' do: {:blk ^my optparse newWithErrorFunction: my errf, define: blk, parse.}.
 }.
 
 # var parser is Optparse newWithErrorFunction: {:err:idx:arg
