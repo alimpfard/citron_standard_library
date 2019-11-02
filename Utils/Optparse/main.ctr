@@ -22,7 +22,7 @@ var Optparse is Object cnew: {
     }.
   }.
   genAccessors: ['banner'].
-  on: 'tryRegisterOption:withShortname:andDescription:do:' do: {:optname:shortname:desc:blk
+  on: 'tryRegisterOption:withShortname:andType:andDescription:do:' do: {:optname:shortname:type:desc:blk
     var immediate is optname endsWith: '.'.
     optname is optname ~ 's/\\.$//'.
     var required is optname endsWith: '!'.
@@ -43,7 +43,8 @@ var Optparse is Object cnew: {
       counts,
       required,
       immediate,
-      blk
+      blk,
+      type
     ] at: optname.
     shortname isNil ifFalse: {
       shortname = \Assign ifTrue: {
@@ -67,7 +68,27 @@ var Optparse is Object cnew: {
     argv isNil ifTrue: {
       argv is Array new fill: Program argCount - 1 with: \:x Program argument: x + 1.
     }.
-    var errorFunc is my errorFunc.
+    var mkerrfunc is {:fn
+        ^{:err
+            ^$`(fn) applyTo: err and: idx and: arg.
+        }.
+    }.
+    var errorFunc is mkerrfunc[my errorFunc].
+    var convert_to_type is {:&val:&type
+        # value : string
+        type = Number ifTrue: {
+            ^val toNumber.
+        }.
+        type = Boolean ifTrue: {
+            ^val at: 0, lower = 't'.
+        }.
+        type = String ifTrue: { ^val. }.
+        type isA: Array, ifTrue: {
+            var elty is type empty? either: String or: { ^type head. }.
+            ^val reSplit: '\\s+', fmap!: {:&x ^convert_to_type[x, elty]. }.
+        }.
+        ^type read: val.
+    } catch: errorFunc.
     var args is Generator elementsOf: argv.
     var programName is args next.
     var helpformat is Map new put: programName at: 'program_name'.
@@ -98,6 +119,7 @@ var Optparse is Object cnew: {
         var counts is vals @ 2.
         var immediate is vals @ 4.
         var handler is vals @ 5.
+        var mtype is vals @ 6.
         counts ifTrue: {
           vcounts contains: arg, ifFalse: {
             vcounts put: 0 at: arg.
@@ -110,14 +132,15 @@ var Optparse is Object cnew: {
               value isNil ifTrue: {
                 errorFunc applyTo: 'argument $$idx (--${{arg}}$) expects an argument, but none was provided'.
               }.
+              value is convert_to_type[value, mtype].
             }.
             immediate ifFalse: {
-              vvalues put: [handler, value] at: arg.
+              vvalues put: [handler, idx, value] at: arg.
             }.
           }.
-          immediate ifTrue: {
+          immediate ifTrue: ({
             handler[value].
-          }.
+          } catch: errorFunc).
         }.
         requiredOpts deleteAt: arg.
       } ifFalse: {
@@ -144,6 +167,7 @@ var Optparse is Object cnew: {
             var counts is vals @ 2.
             var immediate is vals @ 4.
             var handler is vals @ 5.
+            var mtype is vals @ 6.
             value isNil | takes_value ifFalse: {
               var arg is value.
               self[].
@@ -161,13 +185,14 @@ var Optparse is Object cnew: {
                     errorFunc applyTo: 'argument $$idx (-${{arg}}$) expects an argument, but none was provided'.
                   }.
                 }.
+                value is convert_to_type[value, mtype].
                 immediate ifFalse: {
-                  vvalues put: [handler, value] at: varg.
+                  vvalues put: [handler, idx, value] at: varg.
                 }.
               }.
-              immediate ifTrue: {
+              immediate ifTrue: ({
                 handler[value].
-              }.
+              } catch: errorFunc).
             }.
             requiredOpts deleteAt: varg.
           } run.
@@ -184,9 +209,11 @@ var Optparse is Object cnew: {
     vcounts each: {:k:c
       (optmap @ k @ 5) [c].
     }.
-    vvalues each: {:o:hv
+    vvalues each: ({:o:hv
+      var idx is hv @ 1.
+      var arg is o.
       hv head [hv last].
-    }.
+    } catch: errorFunc).
     ^createObject: vvalues andCounts: vcounts.
   }.
   learn: 'parse' means: 'parse:'.
@@ -248,15 +275,31 @@ var Optparse is Object cnew: {
   on: 'define:' do: {:self:block
     var context is Object cnew: {
       parser => self.
+      on: 'on:withDescription:andType:do:' do: {:optname:desc:type:blk
+        my parser tryRegisterOption: optname
+         withShortname: \Assign
+         andType: type
+         andDescription: desc
+         do: blk.
+      }.
+      on: 'on:withShortname:withDescription:andType:do:' do: {:optname:shortname:desc:type:blk
+        my parser tryRegisterOption: optname
+         withShortname: shortname
+         andType: type
+         andDescription: desc
+         do: blk.
+      }.
       on: 'on:withDescription:do:' do: {:optname:desc:blk
         my parser tryRegisterOption: optname
          withShortname: \Assign
+         andType: String
          andDescription: desc
          do: blk.
       }.
       on: 'on:withShortname:withDescription:do:' do: {:optname:shortname:desc:blk
         my parser tryRegisterOption: optname
          withShortname: shortname
+         andType: String
          andDescription: desc
          do: blk.
       }.
@@ -264,6 +307,7 @@ var Optparse is Object cnew: {
     block[context].
     tryRegisterOption: 'help.'
     withShortname: 'h'
+    andType: String
     andDescription: 'displays help'
     do: {
       Pen writeln: (const self summarise formatMap: helpformat).
@@ -272,7 +316,7 @@ var Optparse is Object cnew: {
   }.
 }.
 
-# var parser is Optparse newWithErrorFunction: {:err
+# var parser is Optparse newWithErrorFunction: {:err:idx:arg
 #   Pen red write: 'Error: ', resetColor writeln: err.
 #   Program exit: 1.
 # }.
@@ -302,6 +346,6 @@ var Optparse is Object cnew: {
 #     Pen writeln: 'loop $$what'.
 #   }.
 # }.
-#
+# 
 # var obj is parser parse.
 # Pen writeln: obj.
