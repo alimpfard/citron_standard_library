@@ -14,7 +14,7 @@ Number on: 'alignedTo:' do: {:self:other
   ^(self + other - 1 // other) * other.
 }.
 
-Number learn: 'negated' means: 'neg'.
+Number learn: 'negated' means: 'negate'.
 
 Number on: 'crossSumBase:' do: {:self:base
   # base isA: Number, and: {^base >= 2.}
@@ -45,7 +45,7 @@ Number on: 'reciprocalModulo:' do: {:self:n
   }.
   var result is v - f.
   (var result2 is result + n) > 0 ifFalse: { thisBlock error: 'no inverse'. }.
-  ^result pos either: result or: result2.
+  ^result pos? either: result or: result2.
 }.
 
 Number

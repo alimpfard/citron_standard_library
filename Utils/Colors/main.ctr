@@ -1,5 +1,6 @@
 import
   constants
+  Library/Data/Map
   Library/Data/SwitchCase
   Library/Control/Error/ArgumentError
   Library/Control/Error/NotImplementedError
@@ -111,7 +112,7 @@ Colors on: 'rgb' do: {:red:green:blue:background
     }, case: 256 do: {
       ^[(background either: 4 or: 3), (Colors rgb_to_256: [red, green, blue])].
     }, case: TRUE_COLOR do: {
-      ^[(background either: 4 or: 3), (Colors rgb_true: [red, green, blue])].
+      ^[(background either: 4 or: 3), (Colors rgb_to_true: [red, green, blue])].
     }, default: {\ '' }, switch).
 }.
 
@@ -130,15 +131,15 @@ Colors on: 'rgb_to_ansi:' do: {:red:green:blue:use_bright
 }.
 
 Colors on: 'rgb_to_256:' do: {:rgb
-  # round(36 * (r * 5) + 6 * (g * 5) + (b * 5) + 16)
+  # round(36 * (r * 6 / 256) + 6 * (g * 6 / 256) + (b * 6 / 256))
   ^'8;5;%s' % [
-    ((rgb @ 0 / 256 * 5 * 36) + (rgb @ 1 / 256 * 6 * 36) + (rgb @ 2 / 256 * 5 * 36) + 16) round
+    ((rgb @ 0 / 256 * 6 * 36) + (rgb @ 1 / 256 * 6 * 6) + (rgb @ 2 / 256 * 6)) round
   ].
 }.
 
 Colors on: 'rgb_to_true:' do: {:rgb
-  ^rgb_to_256: rgb.
-}. # TODO
+  ^'8;2;%d;%d;%d' % rgb.
+}.
 
 Colors on: 'rgb_color_distance:color:' do: {:rgb1:rgb2
   ^[rgb1, rgb2] zip foldl: {:acc:x
