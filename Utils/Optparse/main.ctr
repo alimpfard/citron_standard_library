@@ -234,7 +234,7 @@ var Optparse is Object cnew: {
         kl push: k.
       }.
       vs each: {:k:v
-        v is v @ 1.
+        v is v @ 2.
         self on: k do: {\ v }.
       }.
       cs each: {:k:v
