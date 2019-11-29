@@ -1,0 +1,14 @@
+#:language XFrozen
+
+var system is {:cmd
+    var sysfn is (frozen _ is {
+        var thisExec is CTypes loadLibrary: Nil.
+        var sys_e is CIF newByInferringTypes: ['', 0].
+        var sys_s is thisExec system.
+        ^{:cmd ^const sys_e call: const sys_s withArgs: [cmd].}.
+      } run).
+    var st is CTypes fromString: cmd.
+    var res is sysfn[st].
+    st destruct.
+    ^res.
+}.

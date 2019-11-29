@@ -1,5 +1,6 @@
 {
   BigInteger.
+  BigInteger learn: '**' means: 'pow:'.
 } catch: {
   thisBlock error: 'Native BigInteger module does not exist'.
 }, run.

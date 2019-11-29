@@ -1,0 +1,11 @@
+File on: 'tempFile:' do: {:template
+    var offset is template length - (template reverse indexOf: '.') - 1.
+    offset is offset min: template length.
+    var path is template from: 0 length: offset.
+    var file is tempFileLike: path.
+    file close.
+    file delete.
+    path is file path + (template from: offset length: (template length - offset)).
+    ^File new: path.
+}.
+  
