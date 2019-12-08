@@ -50,6 +50,23 @@ Generator on: 'push:' do: {:self:member
     }.
   }.
 }.
+Generator on: 'chunks:fill:' do: {:self:n:fill
+    var underlaying is self.
+    ^Generator repeat: Nil, imap: $!$({:i
+        $`(underlaying) finished break.
+        var arr is Array new.
+        Generator from: 0 to: $`n, each: {
+            $`(underlaying) finished ifTrue: {
+                arr push: $`fill.
+            } ifFalse: {
+                arr push: $`(underlaying) next.
+            }.
+        }.
+        ^arr.
+    }).
+}.
+
+Generator on: 'chunks:' do: {:n ^chunks: n fill: Nil.}.
 
 Number on: 'enumTo:until:' do: {:self:n:last
   ^Generator from: me to: last step: n - self.

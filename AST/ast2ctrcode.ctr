@@ -1,4 +1,5 @@
 import Library/Data/SwitchCase.
+import Library/Data/Generator.
 
 #:language XFrozen
 
@@ -8,7 +9,12 @@ var ast2ctrcode is {:self:ast:curindent:options
   var indent_s        is ' ' * (options at: 'indent_length', or: 2).
   var pkwmsgs         is options at: 'parenthesize_kwmsgs', or: False.
   var inrawcontext    is options at: 'in_call_context', or: 0.
+  var cur_line_length is options at: 'cur_line_length', or: 0.
+  var min_message_split is options at: 'min_message_split', or: 5.
+
   options
+    put: min_message_split at: 'min_message_split',
+    put: cur_line_length at: 'cur_line_length',
     put: max_line_length at: 'max_line_length',
     put: pkwmsgs at: 'parenthesize_kwmsgs',
     put: inrawcontext at: 'in_call_context'.
@@ -20,7 +26,68 @@ var ast2ctrcode is {:self:ast:curindent:options
     },
     case: 'LTRSTRING' do: {
       var value is ast value.
-      ^'\'%s\'' % [value escape: '\n\''].
+      var mvalue is ''.
+      var strs is value split: '\n'.
+      var indent is indent_s * curindent.
+      var last_line_length is 0.
+      value length + 2 + cur_line_length < max_line_length ifTrue: {
+        mvalue is '\'%s\'' % [value escape: '\\\'', escapeAsciiControls].
+        cur_line_length +=: mvalue length.
+        ^mvalue.
+      }.
+      var splitLine is {:str:esc
+        esc ifFalse: {
+          str is str escape: '\\', escapeAsciiControls.
+        }.
+        var clinex is max_line_length - 2 - cur_line_length max: 2.
+        Generator
+          elementsOf: str,
+          chunks: clinex fill: '',
+          each_v: {:chunk
+            var line is
+              '\'%s\' +\n%s' % [
+                (chunk filter_v: \:x x, join: '', escape: '\''),
+                indent + (indent_s * 2)
+              ].
+            last_line_length is line length.
+            mvalue +=: line.
+          }.
+        mvalue is mvalue from: 0 length: mvalue length - indent_s length.
+        mvalue contains: '\n', ifTrue: {
+          mvalue is '(' + mvalue.
+          &&cur_line_length is 0.
+          mvalue is mvalue rightTrim.
+          mvalue is mvalue from: 0 length: mvalue length - '+' length.
+
+        }.
+      }.
+      strs count > 1 ifTrue: {
+        mvalue +=: '('.
+        var sl is value split: '\n'.
+        Generator elementsOf: sl init, each_v: {:&str
+          str is str escape: '\\', escapeAsciiControls.
+          str +=: '\\n'.
+          str length + 3 + cur_line_length < max_line_length ifTrue: {
+            var line is '\'%s\' +\n%s' % [(str escape: '\''), indent + indent_s].
+            last_line_length is line length.
+            mvalue +=: line.
+          } ifFalse: { splitLine[str, True]. }.
+        }.
+        var str is sl last.
+        str is str escape: '\\', escapeAsciiControls.
+        str length + 3 + cur_line_length < max_line_length ifTrue: {
+          var line is '\'%s\' +\n%s' % [(str escape: '\''), indent + indent_s].
+          last_line_length is line length.
+          mvalue +=: line.
+        } ifFalse: { splitLine[str, True]. }.
+        mvalue is mvalue rightTrim.
+        mvalue is mvalue from: 0 length: mvalue length - '+' length.
+      } ifFalse: { splitLine[strs head, False]. }.
+      mvalue is mvalue rightTrim.
+      mvalue is mvalue from: 0 length: mvalue length.
+      mvalue +=: ')'.
+      cur_line_length +=: last_line_length.
+      ^mvalue rightTrim.
     },
     case: 'LTRNIL' do: {
       ^'Nil'.
@@ -50,13 +117,26 @@ var ast2ctrcode is {:self:ast:curindent:options
           }.
         }.
       }.
-
+      var always_split_kwc is ast count.
+      always_split_kwc > 2 ifTrue: {
+        ast each: {:i:ast
+          (i = 0) continue.
+          ast type = 'KWMESSAGE' ifFalse: { always_split_kwc -=: 1. }.
+        }.
+      }.
+      always_split_kwc is (always_split_kwc > 2) | (ast count > min_message_split).
       ct - 1 times: {:i
         var s is ast @ (i + 1).
         var rv is ' ' + self[s, curindent, options].
-        (rec length > max_line_length) ifTrue: {
-          (rec split: '\n', last) length + rv length > max_line_length ifTrue: {
+        always_split_kwc & (i !=: 0) ifTrue: {
             rec +=: '\n' + (indent_s * curindent).
+            cur_line_length -=: cur_line_length.
+        } ifFalse: {
+          (rec length + cur_line_length > max_line_length) ifTrue: {
+            (rec split: '\n', last) length + rv length + cur_line_length > max_line_length ifTrue: {
+              rec +=: '\n' + (indent_s * curindent).
+              cur_line_length -=: cur_line_length.
+            }.
           }.
         }.
         rec +=: rv.
@@ -73,6 +153,11 @@ var ast2ctrcode is {:self:ast:curindent:options
             &&rec is '(${{rec}}$)'.
           }.
         }.
+      }.
+      var lastnewlineidx is rec lastIndexOf: '\n'.
+      lastnewlineidx !=: -1, ifTrue: {
+        cur_line_length -=: cur_line_length.
+        cur_line_length +=: rec length - lastnewlineidx.
       }.
       ^rec.
     },
@@ -94,15 +179,22 @@ var ast2ctrcode is {:self:ast:curindent:options
       value each: {:i:x
         var tc is '%s: %s ' % [x, self[ast @ i, curindent, options]].
         var tchead is tc split: '\n', head.
-        (code last length + tchead length > max_line_length) ifTrue: { # ...\n <code> <tc>
+        (code last length + tchead length + cur_line_length > max_line_length) ifTrue: { # ...\n <code> <tc>
           code push: ''.
+          cur_line_length -=: cur_line_length.
         }.
         code last +=: tc.
       }.
-      var indent is indent_s * curindent.
+      var indent is indent_s * (curindent + 1).
       code is (code join: '\n' + indent).
       curindent -=: 1.
-      ^code rightTrim.
+      var res is code rightTrim.
+      var lastnewlineidx is res lastIndexOf: '\n'.
+      lastnewlineidx !=: -1, ifTrue: {
+        cur_line_length -=: cur_line_length.
+        cur_line_length +=: res length - lastnewlineidx.
+      }.
+      ^res.
     },
     case: 'EXPRASSIGNMENT' do: {
       var ref is self[(ast at: 0), curindent, options].
@@ -117,9 +209,17 @@ var ast2ctrcode is {:self:ast:curindent:options
       var ps is ast at: 0.
       curindent +=: 1.
       var tcode is self[ps, curindent, options].
-      tcode length > max_line_length ifTrue: { code +=: '\n' + (indent_s * curindent). }.
+      tcode contains: '\n', ifTrue: {
+        cur_line_length -=: cur_line_length.
+        tcode is '\n' + (indent_s * curindent) + self[ps, curindent, options].
+      }.
       code +=: tcode.
       curindent -=: 1.
+      var lastnewlineidx is code lastIndexOf: '\n'.
+      lastnewlineidx !=: -1, ifTrue: {
+        cur_line_length -=: cur_line_length.
+        cur_line_length +=: code length - lastnewlineidx.
+      }.
       ^code + ')'.
     },
     case: 'CODEBLOCK' do: {
@@ -159,17 +259,25 @@ var ast2ctrcode is {:self:ast:curindent:options
       var cindent is indentEnd either: { ^'\n' + (indent_s * curindent). } or: ' '.
       var dot is indentEnd either: '.' or: ''.
       var res is fmt % ['',
-              (Array new fill: ps count with: \:x ':' + ((frozen decodeF is {:node ^node value = '' either: {^self[node, curindent, options].} or: node value.})[ps @ x])),
+              (Array new fill: ps count with: \:x ':' + ((frozen decodeF is {:node ^node value = '' either: { cur_line_length -=: cur_line_length. ^self[node, curindent, options].} or: node value.})[ps @ x])),
               cindent,
               cindent,
-              (Array new fill: ins count with: \:x self[ins @ x, curindent, options] + dot),
+              (Array new fill: ins count with: {\:x cur_line_length -=: cur_line_length. self[ins @ x, curindent, options] + dot.}),
               newline either: eindent or: ''
             ].
       curindent -=: 1.
+      var lastnewlineidx is res lastIndexOf: '\n'.
+      lastnewlineidx !=: -1, ifTrue: {
+        cur_line_length -=: cur_line_length.
+        cur_line_length +=: res length - lastnewlineidx.
+      }.
       ^res.
     },
     case: 'PROGRAM' do: {
-      ^(Array new fill: ast count with: \:x self[ast @ x, curindent, options] + '.') join: '\n' + (indent_s * curindent).
+      ^(Array new fill: ast count with: {:x
+          cur_line_length -=: cur_line_length.
+          ^self[ast @ x, curindent, options] + '.'.
+        }) join: '\n' + (indent_s * curindent).
     },
     case: 'ENDOFPROGRAM' do: { ^''. },
     case: 'RETURNFROMBLOCK' do: { ^'^' + self[ast @ 0, curindent, options]. },
@@ -179,8 +287,15 @@ var ast2ctrcode is {:self:ast:curindent:options
       var newlined is False.
       var braced is False.
       inrawcontext +=: 1.
-      var elems is Array new fill: pcount with: {\:i
-        self[ps @ i, curindent, options].
+      var elems is Array new.
+      pcount times: {:i
+        var px is self[ps @ i, curindent, options].
+        px contains: '\n', ifTrue: {
+          cur_line_length -=: cur_line_length.
+          elems push: self[ps @ i, curindent, options].
+        } ifFalse: {
+          elems push: px.
+        }.
       }.
       inrawcontext -=: 1.
       elems all: {\:x x startsWith: '.'}, & (elems count > 0) ifTrue: {
@@ -203,21 +318,32 @@ var ast2ctrcode is {:self:ast:curindent:options
       var code is Array < (sbrac + '').
       elems each_v: {:&gen
         var tcode is code last + gen + ', '.
-        tcode split: '\n', last length > max_line_length ifTrue: {
+        tcode split: '\n', last length + cur_line_length > max_line_length ifTrue: {
           code unshift: (indent_s * (curindent + 1)) + (code shift skip: 1).
           code unshift: sbrac.
           code push: (indent_s * (curindent + 1)) + gen + ', '.
           newlined is True.
+          cur_line_length -=: cur_line_length.
         } ifFalse: { code last +=: gen + ', '. }.
       }.
       pcount > 0 ifTrue: { code put: (code last from: 0 to: code last length - 2) at: code count - 1. }.
-      code last split: '\n', last length > max_line_length ifTrue: { code push: ''. }.
+      code last split: '\n', last length + cur_line_length > max_line_length
+        ifTrue: {
+          code push: ''.
+          cur_line_length -=: cur_line_length.
+        }.
       newlined ifTrue: {
         code push: (indent_s * curindent) + ebrac.
       } ifFalse: {
         code last +=: ebrac.
       }.
-      ^code filter_v: \:x x trim length, join: '\n'.
+      var res is code filter_v: \:x x trim length, join: '\n'.
+      var lastnewlineidx is res lastIndexOf: '\n'.
+      lastnewlineidx !=: -1, ifTrue: {
+        cur_line_length -=: cur_line_length.
+        cur_line_length +=: res length - lastnewlineidx.
+      }.
+      ^res.
     },
     case: 'RAW' do: {
       var res is Nil.
@@ -269,10 +395,14 @@ var ast2ctrcode is {:self:ast:curindent:options
         }) each_v: {:gen
           var tgencode is gencode + gen + ', '.
           tgencode split: '\n', last length > max_line_length ifTrue: { tgencode is gencode + '\n' + (indent_s * (curindent + 1)) + gen + ', '. }.
+          cur_line_length -=: cur_line_length.
           gencode is tgencode.
         }.
         pcount > 0 ifTrue: { gencode is gencode from: 0 to: gencode length - 2. }.
-        gencode split: '\n', last length > max_line_length ifTrue: { gencode +=: '\n'. }.
+        gencode split: '\n', last length + cur_line_length > max_line_length ifTrue: {
+          gencode +=: '\n'.
+          cur_line_length -=: cur_line_length.
+        }.
       } catch: {}, run.
       var predcode is ''.
       {
@@ -282,9 +412,13 @@ var ast2ctrcode is {:self:ast:curindent:options
           var tpredcode is predcode + gen + ', '.
           tpredcode split: '\n', last length > max_line_length ifTrue: { tpredcode is predcode + '\n' + (indent_s * (curindent + 1)) + gen + ', '. }.
           predcode is tpredcode.
+          cur_line_length -=: cur_line_length.
         }.
         pcount > 0 ifTrue: { predcode is predcode from: 0 to: predcode length - 2. }.
-        predcode split: '\n', last length > max_line_length ifTrue: { predcode +=: '\n'. }.
+        predcode split: '\n', last length + cur_line_length > max_line_length ifTrue: {
+          predcode +=: '\n'.
+          cur_line_length -=: cur_line_length.
+        }.
       } catch: { }, run.
       var exprv is '['.
       expr type = 'NESTED' ifTrue: {
@@ -295,18 +429,25 @@ var ast2ctrcode is {:self:ast:curindent:options
       gencode = '' ifFalse: {
         var exprvb is exprv + ''.
         exprv +=: ',, ' + gencode.
-        exprv split: '\n', last length > max_line_length ifTrue: {
+        exprv split: '\n', last length + cur_line_length > max_line_length ifTrue: {
           exprv is '${{exprvb}}$,,\n${{indent_s * (curindent + 1)}}$$$gencode'.
+          cur_line_length -=: cur_line_length.
         }.
       }.
       predcode = '' ifFalse: {
         var exprvb is exprv + ''.
         exprv +=: ',, ' + predcode.
-        exprv split: '\n', last length > max_line_length ifTrue: {
+        exprv split: '\n', last length + cur_line_length > max_line_length ifTrue: {
           exprv is '${{exprvb}}$,,\n${{indent_s * (curindent + 1)}}$$$predcode'.
+          cur_line_length -=: cur_line_length.
         }.
       }.
       exprv +=: ']'.
+      var lastnewlineidx is exprv lastIndexOf: '\n'.
+      lastnewlineidx !=: -1, ifTrue: {
+        cur_line_length -=: cur_line_length.
+        cur_line_length +=: exprv length - lastnewlineidx.
+      }.
       ^exprv.
     },
     default: { errPen red writeln: '$$ast is not unparsable at the moment ( because of $$value )', resetColor. }) switch: ast type.
