@@ -450,5 +450,10 @@ var ast2ctrcode is {:self:ast:curindent:options
       }.
       ^exprv.
     },
+    case: 'NATIVEFN' do: {
+      var insns is (ast at: 0, value split: '\n', fmap!: \:&x x trim).
+      var insnstr is insns join: '\n' + (indent_s * (curindent + 1)).
+      ^'{asm' + '\n' + (indent_s * (curindent + 1)) + insnstr + '\n' + (indent_s * curindent) + '}'.
+    },
     default: { errPen red writeln: '$$ast is not unparsable at the moment ( because of $$value )', resetColor. }) switch: ast type.
 }.
