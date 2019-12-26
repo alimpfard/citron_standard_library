@@ -168,7 +168,7 @@ var ast2ctrcode is {:self:ast:curindent:options
       ^ast value + ' ' + self[ast @ 0, curindent, options].
     },
     case: 'KWMESSAGE' do: {
-      ast value = 'applyAll:' ifTrue: {
+      (ast value = 'applyAll:') & (ast at: 0, type = 'IMMUTABLE') ifTrue: {
         # single expression, return [...args]
         options put: 1 at: 'in_call_context'.
         ^self[ast @ 0, curindent, options].
