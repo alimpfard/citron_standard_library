@@ -3,4 +3,7 @@ import
   Symbolic: \*.
 
 import
+  Library/Data/Array.
+
+import
   Library/Functional/Alias.

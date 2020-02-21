@@ -59,7 +59,7 @@ var asBlock is {:msg:active
 var sendMsg is {\:msg:*arg0s
     var msgv is asBlock[msg, arg0s count].
     ^{\:obj:*args
-        Reflect run: msgv forObject: obj arguments: arg0s + args.
+        Reflect run: msgv forObject: obj arguments: (arg0s + args) reverse.
     }.
 }.
 

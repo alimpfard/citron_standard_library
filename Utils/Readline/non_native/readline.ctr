@@ -1,0 +1,207 @@
+import
+  Library/Utils/Readline/non_native/escapes: { ReadlineEscapes. }
+.
+
+import
+  Library/Foreign/Interop/C
+.
+
+#:language XFrozen
+
+Inject
+  importFunctionsOrTypes: [
+    'termios', 'isatty', 'tcgetattr', 'tcsetattr'
+  ]
+  andDefines: [
+    'BRKINT', 'ICRNL', 'INPCK', 'ISTRIP', 'IXON', 'OPOST',
+    'CS8', 'ECHO', 'ICANON', 'IEXTEN', 'ISIG', 'VMIN', 'VTIME',
+    'TCSAFLUSH'
+  ]
+  fromHeaders: ['termios.h', 'unistd.h']
+  andLibraries: [].
+
+var Readline is Object cnew: {
+  var unsupportedTerminals is ['dumb', 'cons25', 'emacs'].
+
+  genAccessors: [
+    'ifd', 'ofd', 'buf', 'prompt', 'pos', 'oldPos',
+    'cols', 'maxRows', 'historyIndex', 'completionCallback',
+    'hintsCallback', 'mlmode', 'historyMaxLength', 'history',
+    'origTermios', 'raw'
+  ].
+
+  on: 'init' do: {
+    ifd => 0. # stdin file descriptor
+    ofd => 1. # stdout file descriptor
+    buf => ''. # edited line buffer
+    prompt => ''. # prompt to display
+    pos => 0. # current cursor position
+    oldPos => 0. # previous cursor position
+    cols => 0. # terminal columns
+    maxRows => 0. # multiline: maximum rows used so far
+    historyIndex => 0. # history index being edited
+
+    completionCallback => {}.
+    hintsCallback => {}.
+
+    mlmode => False. # multiline mode
+    historyMaxLength => 100.
+    history => Array new.
+
+    origTermios => termios newIns.
+    raw => False.
+  }.
+  on: 'new' do: {
+    ^cnew: { me init. }.
+  }.
+
+  on: 'setMultiline:' do: {:multiline
+    mlmode => multiline toBoolean.
+  }.
+
+  on: 'isUnsupportedTerm' do: {
+    ^ const unsupportedTerminals contains: (Program env: 'TERM').
+  }.
+
+  on: 'enableRawMode:' do: {:fd
+    isatty[0] ifFalse: {
+      ^ False.
+    }.
+    my raw ifTrue: { ^True. }.
+
+    tcgetattr[fd, my origTermios struct].
+
+    var term is termios newIns.
+
+    tcgetattr[fd, term struct] = -1 ifTrue: {
+      ^ False.
+    }.
+
+    # input modes: no CR to NL, no parity check, no strip char, no start/stop output control
+    term memberCIflag: (
+      term memberCIflag bitAnd: (
+        0b11111111111111111111111111111111 bitXor: (
+          BRKINT bitOr: ICRNL,
+           bitOr: INPCK,
+           bitOr: ISTRIP,
+           bitOr: IXON))).
+
+    # output modes: disable post processing
+    term memberCOflag: (
+      term memberCOflag bitAnd: (
+        0b11111111111111111111111111111111 bitXor: OPOST)).
+
+    # control modes: set 8-bit controls
+    term memberCCflag: (
+      term memberCCflag bitAnd: (
+        0b11111111111111111111111111111111 bitXor: CS8)).
+
+    # local modes: echo off, canonical off, no extended functions, no signal char (^Z, ^C)
+    term memberCLflag: (
+      term memberCLflag bitAnd: (
+        0b11111111111111111111111111111111 bitXor: (
+          ECHO bitOr: ICANON,
+           bitOr: IEXTEN,
+           bitOr: ISIG))).
+
+    term memberCCc put: 1 at: VMIN.
+    term memberCCc put: 0 at: VTIMER.
+
+    tcsetattr[fd, TCSAFLUSH, raw struct] < 0 ifTrue: {
+      ^ False.
+    }.
+    raw => True.
+    ^ True.
+  }.
+
+  on: 'disableRawMode:' do: {:fd
+    raw ifTrue: {
+      tcsetattr[fd, TCSAFLUSH, my origTermios struct].
+      raw => False.
+    }.
+  }.
+
+  on: 'getCursorPosition' do: {
+    ^ ReadlineEscapes deviceStatusReport[me] last.
+  }.
+
+  on: 'getColumns' do: {
+    var start is me getCursorPosition.
+
+    ReadlineEscapes cursorForward[me, 9999].
+    var cols is me getCursorPosition.
+    cols = -1 ifTrue: { ^80. }.
+
+    cols > start ifTrue: {
+      ReadlineEscapes cursorBackward[me, cols - start].
+    }.
+    ^ cols.
+  }.
+
+  on: 'clearScreen' do: {
+    ReadlineEscapes cursorToHome[me].
+    ReadlineEscapes eraseDisplay[me].
+  }.
+
+  on: 'beep' do: {
+    rawPrint: '\a'.
+  }.
+
+  # =================================== Completion ======================================= #
+
+  on: 'completeLine' do: {:self
+    var completions is Array new.
+    var c is ''.
+
+    my completionCallback[my buf, completions].
+    lc empty? ifTrue: {
+      me beep.
+    } ifFalse: {
+      var stop is 0.
+      var i is 0.
+      {
+        (stop = 0) break.
+
+        i < lc count ifTrue: {
+          var saved is self copy.
+
+          self pos: (completions @ i) length.
+          self len: self pos.
+          self buf: completions @ i.
+          self refreshLine.
+
+          saved restore: self.
+        } ifFalse: {
+          self refreshLine.
+        }.
+
+        var xc is self input read: 1.
+        (xc = '') break.
+
+        c is xs.
+
+        (frozen _ is String
+          case: '\t' do: {
+            i is i + 1 mod: completions count + 1.
+            i = completions count ifTrue: { self beep. }.
+          },
+          case: '\x1b' do: {
+            i < completions count ifTrue: {
+              self refreshLine.
+            }.
+            stop is True.
+          },
+          default: {
+            i < completion count ifTrue: {
+              self buf: completions @ i.
+              self len: self buf length.
+              self pos: self buf length.
+            }.
+            stop is True.
+          }) switch: c.
+      } forever.
+
+      ^c.
+    }.
+  }.
+}.

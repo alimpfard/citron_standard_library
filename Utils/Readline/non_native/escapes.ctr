@@ -1,0 +1,58 @@
+var ReadlineEscapes is Object cnew: {
+  eraseLine => {:readline:&n
+    # ^[[n;K
+    # n?
+    #  0/Nil => Cursor to end
+    #  1     => Beginning of line to cursor
+    #  2     => Entire line
+    readline rawPrint: '\x1b[${{n}}$K'.
+    ^ Nil.
+  }.
+  cursorForward => {:readline:&n
+    # ^[[nC
+    # move cursor forward
+    readline rawPrint: '\x1b[${{n}}$C'.
+    ^ Nil.
+  }.
+  cursorBackward => {:readline:&n
+    # ^[[nD
+    # move cursor backward
+    readline rawPrint: '\x1b[${{n}}$D'.
+    ^ Nil.
+  }.
+  deviceStatusReport => {:readline
+    # ^[[6n
+    # returns current cursor position as [row, column]
+    readline rawPrint: '\x1b[6n'.
+    ['\x1b[', n, ';', m, 'R'] is readline rawRead.
+    ^[n, m] fmap!: \:&x x toNumber.
+  }.
+  cursorUp => {:readline:&n
+    # ^[[nA
+    # move cursor up
+    readline rawPrint: '\x1b[${{n}}$A'.
+    ^ Nil.
+  }.
+  cursorDown => {:readline:&n
+    # ^[[nB
+    # move cursor down
+    readline rawPrint: '\x1b[${{n}}$B'.
+    ^ Nil.
+  }.
+  cursorToHome => {:readline
+    # ^[[H
+    # move cursor to upper left corner
+    readline rawPrint: '\x1b[H'.
+    ^ Nil.
+  }.
+  eraseDisplay => {:readline
+    # ^[[2J
+    # clear the whole screen
+    readline rawPrint: '\x1b[2J'.
+    ^ Nil.
+  }.
+
+  on: 'respondTo:' do: {:name
+    ^ Reflect getProperty: name ofObject: me.
+  }.
+}.

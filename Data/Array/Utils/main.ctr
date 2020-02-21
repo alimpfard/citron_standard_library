@@ -150,3 +150,10 @@ Array on: 'tails' do: {:self
   var length is self count.
   ^(imap: \:i self from: i + 1 lengthMax: length) unshift: self copy.
 }.
+
+Array on: 'newWith:nth:' do: {:self:blk:n
+  var new is Array new: self count, fill: self count with: \:x self at: x.
+  new put: (blk applyTo: new @ n)
+   at: n.
+  ^new.
+}.

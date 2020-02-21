@@ -1,7 +1,9 @@
 # import require-parent.
 import Library/Functional/Category/Block.
 
-CodeBlock learn: '$' means: 'applyAll:'.
+CodeBlock on: '$' do: {:self:&arg
+    ^curry[self] applyTo: arg.
+}.
 CodeBlock learn: ';' means: 'compose:'.
 CodeBlock on: '|' do: {:self:other
   ^other compose: self.

@@ -60,12 +60,22 @@ var blockCase is {:*exprs
   exprs each_v: {:expr
     # ASSIGN (case) (alternative)
     var case is expr @ 0 evaluateInContext: frame.
-    var alternative is expr @ 1 @ 1.
+    var alternative is expr @ 1.
+    alternative type = 'CODEBLOCK' ifTrue: {
+        alternative is alternative @ 1.
+    }.
     case id = otherwise id ifTrue: {
       default is alternative.
     } ifFalse: {
       alternatives put: alternative at: case.
     }.
   }.
-  ^$!$({:arg (var res is $`(alternatives) at: arg) isNil ifTrue: { ^$`default.} ifFalse: {^res.}.}).
+  ^$!$({:arg
+    var res is $`(alternatives) at: arg.
+    res isNil ifTrue: {
+            ^$`default.
+        } ifFalse: {
+            ^res.
+        }.
+    }).
 }.

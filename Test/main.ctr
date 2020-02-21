@@ -91,6 +91,24 @@ It on: 'do:' do: {:blk
                 do shift shift shift shift done reverse
                 filter: (\:_:x x containsPattern: ?>\(.*(Library/Test|extensions/importlib\.ctr).*\)<?, not),
                 fmap: \:x x ~ ?>s/^#\d+ (.*)$/$1/<?,
+                fmap: (\:x x length > 30 ifTrue: {
+                        var meth is x ~ ?>s/(.*)\(.*: .*\)/$1/<?.
+                        var path is x ~ ?>s/.*\((.*): .*\)/$1/<?.
+                        var lineno is x ~ ?>s/.*\(.*: (.*)\)/$1/<?.
+                        var sp is x length.
+                        path is path split: '/'.
+                        var pcount is path count.
+                        path is path imap: {:i:x
+                            i + 1 = pcount ifTrue: { ^x. }.
+                            sp > 30 ifTrue: {
+                                sp -=: x length - 1.
+                                ^x at: 0.
+                            } ifFalse: {
+                                ^x.
+                            }.
+                        }, join: '/'.
+                        ^meth + '(' + path + ': ' + lineno + ')'.
+                    } ifFalse: { ^x. }),
                 imap: \:i:x '\t${{(Colors red)}}$| #${{i + 1}}$${{(Colors default)}}$ $$x',
                 join: '\n'
         ).

@@ -2,7 +2,11 @@ import Library/Control/MethodResolve: 'sendMsg'.
 
 var <- is Object new
   on: 'respondTo:' do: sendMsg,
-  on: 'respondTo:and:' do: sendMsg.
+  on: 'respondTo:and:' do: sendMsg,
+  on: 'respondTo:and:and:' do: sendMsg,
+  on: 'respondTo:and:and:and:' do: sendMsg,
+  on: 'respondTo:and:and:and:and:' do: sendMsg,
+  on: 'respondTo:and:and:and:and:and:' do: sendMsg.
 
 var -> is {:expr
   var context is Reflect frame: (Reflect frameId - 1 max: 0).
