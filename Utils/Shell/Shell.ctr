@@ -49,6 +49,14 @@ var shExec is {:cmd
   ^Nil.
 }.
 
+var sh is {:cmd
+  ^Shell call: cmd.
+}.
+
+sh on: 'process:' do: {:cmd
+  ^me applyTo: cmd.
+}.
+
 # Returns the arguments as an array
 var collect is \:*args args.
 

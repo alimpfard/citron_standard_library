@@ -3,12 +3,20 @@
 
 var id is \:x x.
 var rconst is \:x {\ x }.
+
+# Apply function
 var $ is \:x:y x[y].
 
 var flip is \:f \:x:y f[y, x].
 var flip* is \:f \:*args f applyAll: args reverse.
 
+# Array prepend function
 var ;; is \:val:list list do unshift: val, done.
+
+# Feed-forward 'pipe'
+Object on: '|>' do: {:&fn
+    ^fn[me].
+}.
 
 # very scary currying
 var _curry is {:self:blk:args:fcurry
