@@ -22,8 +22,8 @@ var Optparse is Object cnew: {
       ^cnew: {
         mtype => ty.
         default => def.
-        learn: 'new' means: 'default'.
-        learn: 'new:' means: 'construct:'.
+        on: 'new' do: { ^me default. }.
+        on: 'new:' do: {:val ^construct: val. }.
       }.
     }.
     on: 'construct:' do: {:val
@@ -313,12 +313,12 @@ var Optparse is Object cnew: {
         (short isNil not either: '|-$$short' or: ''),
         eqvs
       ].
-      summary push: '--%s%s%s\t\t%s%s' % [
+      summary push: '--%s%s%s\n\t  %s%s\n' % [
         opt,
         (short isNil not either: ', -$$short' or: ''),
         (req either: ' !' or: ''),
         desc,
-        (takes_value either: {\ '\t\t--${{opt}}$=%s, --$$opt %s' % ([type isA: String, either: 'value' or: '<' + type type + '>'] * 2). } or: {
+        (takes_value either: {\ '\n\t  format: --${{opt}}$=%s, --$$opt %s' % ([type isA: String, either: 'value' or: '<' + type type + '>'] * 2). } or: {
           ^counts either: '\t\t(*)' or: ''.
         })
       ].
@@ -397,6 +397,7 @@ var parseArguments is Object cnew: {
 #   p on: 'test=' withDescription: 'sets test' do: {:value
 #     Pen writeln: 'test = $$value'.
 #   },
+#   p on: 'enum=' withType: (enum: ['1', '2', '3'] default: '1') withDescription: 'is an enum value' do: {},
 #   on: 'shit*' withDescription: 'counts shits' do: {:count
 #     Pen writeln: '$$count shits given'.
 #   },
