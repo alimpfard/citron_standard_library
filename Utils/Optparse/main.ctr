@@ -101,7 +101,8 @@ var Optparse is Object cnew: {
     }.
     var mkerrfunc is {:fn
         ^{:err:idx:arg
-            ^$`(fn) applyTo: err and: idx and: arg.
+            $`(fn) applyTo: err and: idx and: arg.
+            ^Nil.
         }.
     }.
     var errorFunc is mkerrfunc[my errorFunc].
