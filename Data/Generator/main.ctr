@@ -68,6 +68,24 @@ Generator on: 'chunks:fill:' do: {:self:n:fill
 
 Generator on: 'chunks:' do: {:n ^chunks: n fill: Nil.}.
 
+Generator on: 'select:' do: {:self:blk
+    ^Generator repeat: self, fmap: {:gen
+        gen finished break.
+        ^const blk[gen].
+     }.
+}.
+
+Generator on: 'break:' do: {:self:blk
+    ^Geneator repeat: self, fmap: {:gen
+        gen finished break.
+        var value is gen next.
+        var arr is Array new.
+        { ^gen finished | const blk[value]. } whileFalse: { arr push: value. value is gen next. }.
+        arr push: value.
+        ^arr.
+    }.
+}.
+
 Number on: 'enumTo:until:' do: {:self:n:last
   ^Generator from: me to: last step: n - self.
 }.
