@@ -49,8 +49,12 @@ var Optparse is Object cnew: {
       shortnameMap => HashMap new.
       shortnameReverseMap => HashMap new.
       errorFunc => erf.
+      ignoreUnknownArguments => False.
       banner: './program - runs fancy shit'.
     }.
+  }.
+  on: 'ignoreUnknownArguments' do: {
+      ignoreUnknownArguments => True.
   }.
   genAccessors: ['banner'].
   on: 'tryRegisterOption:withShortname:andType:andDescription:do:' do: {:optname:shortname:type:desc:blk
@@ -137,6 +141,7 @@ var Optparse is Object cnew: {
     var vcounts is Map new.
     var vvalues is Map new.
     var provided is Map new.
+    var ignore is my ignoreUnknownArguments.
     optmap each: {:k:v
       v @ 3 ifTrue: {
         requiredOpts put: True at: k.
@@ -153,6 +158,9 @@ var Optparse is Object cnew: {
         }.
         var vals is optmap at: arg.
         vals isNil ifTrue: {
+          ignore ifTrue: {
+              ^Nil.
+          }.
           errorFunc applyTo: 'argument $$idx (--${{arg}}$) makes no sense to me'.
         } ifFalse: {
             provided put: True at: arg.
@@ -199,10 +207,16 @@ var Optparse is Object cnew: {
             }.
             var varg is shortnameMap at: arg.
             varg isNil ifTrue: {
+              ignore ifTrue: {
+                  ^Nil.
+              }.
               errorFunc applyTo: 'argument $$idx (-${{arg}}$) makes no sense to me'.
             }.
             var vals is optmap at: varg.
             vals isNil ifTrue: {
+              ignore ifTrue: {
+                  ^Nil.
+              }.
               errorFunc applyTo: 'argument $$idx (--${{arg}}$) makes no sense to me'.
             } ifFalse: {
                 provided put: True at: varg.
@@ -242,6 +256,9 @@ var Optparse is Object cnew: {
             requiredOpts deleteAt: varg.
           } run.
         } ifFalse: {
+          ignore ifTrue: {
+              ^Nil.
+          }.
           errorFunc applyTo: 'argument $$idx (${{arg}}$) came as a complete surprise'.
         }.
       }.
