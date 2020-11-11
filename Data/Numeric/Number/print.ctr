@@ -74,3 +74,12 @@ Number on: 'numberOfDigitsInBase:' do: {:self:base
 Number on: 'asStringInBase:length:zeroPadded:' do: {:self:base:minimumLength:padWithZeros
   ^toStringInBase: base, paddingLeft: minimumLength, replace: ' ' with: (padWithZeros either: '0' or: ' ').
 }.
+
+Number on: 'toStringInBase:withDigits:' do: {:base:digits
+  digits length = base ifFalse: {
+    thisBlock error: 'Expected length of digits to equal the base'.
+  }.
+  var digitMap is digits paddingRight: 36.
+  digitMap is digitMap reverse + digitMap.
+  ^toStringInBase: base withMapping: digitMap.
+}.
