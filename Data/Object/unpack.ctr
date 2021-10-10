@@ -1,0 +1,9 @@
+Object on: 'componentUnpackWith:' do: {:names
+    on: 'unpack:' do: {:self:pattern:context
+        const names each_v: {:name
+            var v is Reflect getProperty: name ofObject: self.
+            var p is Reflect getProperty: name ofObject: pattern.
+            v message: 'unpack:' arguments: [p, context].
+        }.
+    }.
+}.
