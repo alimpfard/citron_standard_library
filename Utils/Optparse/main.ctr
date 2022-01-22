@@ -4,6 +4,11 @@
 #    (withShortname: [OptShortName:String])
 #    withDescription: [description:String]
 #    do: [Block]
+# [p] argument: [name:String]
+#     withDescription: [description:String]
+#     (withType: [OptType:Object (new, new:)])
+#     (required: [Bool | Number])
+#     do: [Block]
 # OptName determines the kind of the option [checked in the order listed here]:
 #    <name>. - executed as seen
 #    <name>! - must be present (required option)
@@ -48,6 +53,7 @@ var Optparse is Object cnew: {
       optionMap => HashMap new.
       shortnameMap => HashMap new.
       shortnameReverseMap => HashMap new.
+      argumentList => Array new.
       errorFunc => erf.
       ignoreUnknownArguments => False.
       banner: './program - runs fancy shit'.
@@ -99,6 +105,27 @@ var Optparse is Object cnew: {
       }.
     }.
   }.
+  on: 'addArgument:withName:andType:andRequiredCount:do:' do: {:desc:name:type:req:blk
+    req isA: Boolean, ifTrue: {
+      req is req either: 1 or: 0.
+    } ifFalse: {
+      req isA: Number, ifTrue: {
+        (req < -1) | (req floor !=: req) ifTrue: {
+          thisBlock error: 'value for required must be an integer larger than or equal to negative one'.
+        }.
+      } ifFalse: {
+        thisBlock error: 'value for required must be either a boolean or a number'.
+      }.
+    }.
+    my argumentList push: [
+      name,
+      desc,
+      type,
+      (req < 0 either: 0 or: req),
+      req,
+      blk
+    ].
+  }.
   on: 'parse:' do: {:argv
     argv isNil ifTrue: {
       argv is Array new fill: Program argCount - 1 with: \:x Program argument: x + 1.
@@ -130,14 +157,16 @@ var Optparse is Object cnew: {
             var elty is type empty? either: String or: { ^type head. }.
             ^val reSplit: '\\s+', fmap!: {:&x ^convert_to_type[x, elty]. }.
         }.
-        ^type read: val.
+        ^type new: val.
     } catch: errorFunc.
     var args is Generator elementsOf: argv.
     var programName is args next.
     var helpformat is Map new put: programName at: 'program_name'.
     var optmap is my optionMap.
+    var argList is my argumentList fmap: \:x x copy.
     var shortnameMap is my shortnameMap.
     var requiredOpts is HashMap new.
+    var createdArgs is HashMap new.
     var vcounts is Map new.
     var vvalues is Map new.
     var provided is Map new.
@@ -248,14 +277,68 @@ var Optparse is Object cnew: {
                 immediate ifFalse: {
                   vvalues put: [handler, idx, value] at: varg.
                 }.
+              } ifFalse: {
+                vvalues put: [{}, idx, \Seen] at: varg.
               }.
               immediate ifTrue: ({
                 handler[value].
-              } catch: errorFunc).
+              } catch: errorFunc)
             }.
             requiredOpts deleteAt: varg.
           } run.
         } ifFalse: {
+          argList empty? ifFalse: {
+            var assigned is False.
+            var count is argList count.
+            {
+              (count = 0) ifTrue: {
+                argList is argList reverse.
+              }, break.
+
+              var thisArg is argList head.
+              # name desc type req originalReq block
+              thisArg @ 3 > 0 ifTrue: {
+                thisArg @ 3 -=: 1.
+                var value is convert_to_type[arg, thisArg @ 2].
+                thisArg @ 4 > 1 ifTrue: {
+                  createdArgs put: value at: thisArg @ 0.
+                } ifFalse: {
+                  createdArgs contains: thisArg @ 0, ifTrue: {
+                    createdArgs at: thisArg @ 0, push: value.
+                  } ifFalse: {
+                    createdArgs put: Array < value at: thisArg @ 0.
+                  }.
+                }.
+                thisArg @ 3 = 0 ifTrue: {
+                  argList shift.
+                }.
+                assigned is True.
+              }, break.
+
+              argList push: argList shift.
+              count -=: 1.
+            } forever.
+            count = 0 ifTrue: {
+              var thisArg is argList head.
+              var value is convert_to_type[arg, thisArg @ 2].
+              thisArg @ 4 between: -2 and: 1, not ifTrue: {
+                createdArgs put: value at: thisArg @ 0.
+              } ifFalse: {
+                createdArgs contains: thisArg @ 0, ifTrue: {
+                  createdArgs at: thisArg @ 0, push: value.
+                } ifFalse: {
+                  createdArgs put: Array < value at: thisArg @ 0.
+                }.
+              }.
+              thisArg @ 4 !=: -1, ifTrue: {
+                argList shift.
+              }.
+              assigned is True.
+            }.
+            assigned ifTrue: {
+              ^Nil.
+            }.
+          }.
           ignore ifTrue: {
               ^Nil.
           }.
@@ -276,10 +359,10 @@ var Optparse is Object cnew: {
       var arg is o.
       hv head [hv last].
     } catch: errorFunc).
-    ^createObject: vvalues andCounts: vcounts andProvided: provided.
+    ^createObject: vvalues andCounts: vcounts andProvided: provided andArgs: createdArgs andArgList: my argumentList.
   }.
   learn: 'parse' means: 'parse:'.
-  on: 'createObject:andCounts:andProvided:' do: {:vs:cs:provided
+  on: 'createObject:andCounts:andProvided:andArgs:andArgList:' do: {:vs:cs:provided:args:argList
     var optmap is my optionMap.
     ^Object cnew: {:self
       keylist => var kl is Array new.
@@ -293,6 +376,10 @@ var Optparse is Object cnew: {
         var contains is provided contains: k.
         self on: k + '?' do: {\ ^contains. }.
         kl push: k.
+      }.
+      argList each_v: {:x
+        kl push: x @ 0.
+        self on: x @ 0 do: {\ args @ (x @ 0). }.
       }.
       vs each: {:k:v
         v is v @ 2.
@@ -341,6 +428,21 @@ var Optparse is Object cnew: {
         })
       ].
     }.
+    my argumentList each_v: {:desc
+      [name, desc, type, _, req, _] is desc.
+      simple +=: (req > 0 either: ' <%s>' or: ' [%s]') % [(
+        '%s%s%s' % [
+          name,
+          (type isA: String, either: '' or: '(' + type type + ')'),
+          (req < 0 either: '...' or: (req = 0 either: '' or: (req > 1 either: '...$$req' or: '')))
+        ]
+      )].
+      summary push: '%s\n\t  %s: %s\n' % [
+        name,
+        (type isA: String, either: 'any' or: type type),
+        desc
+      ].
+    }.
     ^me banner + '\n\n%{program_name}' + simple + '\n\n  ' + (summary join: '\n  ').
   }.
   on: 'define:' do: {:self:block
@@ -373,6 +475,34 @@ var Optparse is Object cnew: {
          withShortname: shortname
          andType: type
          andDescription: desc
+         do: blk.
+      }.
+      on: 'argument:withDescription:do:' do: {:name:desc:blk
+        my parser addArgument: desc
+         withName: name
+         andType: String
+         andRequiredCount: 1
+         do: blk.
+      }.
+      on: 'argument:withDescription:required:do:' do: {:name:desc:req:blk
+        my parser addArgument: desc
+         withName: name
+         andType: String
+         andRequiredCount: req
+         do: blk.
+      }.
+      on: 'argument:withDescription:withType:do:' do: {:name:desc:type:blk
+        my parser addArgument: desc
+         withName: name
+         andType: type
+         andRequiredCount: 1
+         do: blk.
+      }.
+      on: 'argument:withDescription:withType:required:do:' do: {:name:desc:type:req:blk
+        my parser addArgument: desc
+         withName: name
+         andType: type
+         andRequiredCount: req
          do: blk.
       }.
 
