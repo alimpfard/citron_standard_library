@@ -51,7 +51,7 @@ var Signal is Object cnew: {
     (my sigaction get = 0) ifTrue: { thisBlock error: 'Could not find #sigaction in the current executable'. }.
     my sa_handler_ty is CIF new setABI: 0 return: Nil argTypes: [c_int].
     my sigaction_ty  is CIF new setABI: 0 return: c_int argTypes: [c_int, c_ptr, c_ptr].
-    my struct_sigaction is NamedStruct new initAs: 'p6uisip' names: ['sa_handler', 'sa_mask', 'sa_flags', 'sa_restorer']. #Do NOT assign to sa_sigaction TODO: figure out a way to handle the (probable union type)
+    my struct_sigaction is NamedStruct new initAs: 'p6uisip<32>' names: ['sa_handler', 'sa_mask', 'sa_flags', 'sa_restorer']. #Do NOT assign to sa_sigaction TODO: figure out a way to handle the (probable union type)
     my kill_ty is CIF new setABI: 0 return: c_int argTypes: [c_int, c_int].
     my kill is my libhandle kill.
   }.
